@@ -370,6 +370,16 @@ def build_diet(profile, mbd, wbd, L, latest_w):
             coach_d += "像 %s 这种高蛋白低脂、又顶饱的，正是松松推荐的好食材。" % "、".join(smart[:3])
         if is_train:
             coach_d += "今天是训练日，把碳水主力放在练后那一餐（全天最大一份、练后 30 分钟内）。"
+        # 日内碳水分配(松松第5节):非练后/练前的单顿碳水占全天≥40% → 提醒别堆
+        if q["carb_g"]:
+            over = [(mn, round(day_nutrition(its)["carb"]), round(day_nutrition(its)["carb"] / q["carb_g"] * 100))
+                    for mn, its in bymeal.items()
+                    if "练后" not in mn and "练前" not in mn and day_nutrition(its)["carb"] / q["carb_g"] >= 0.40]
+            if over:
+                mn, mc, pct = max(over, key=lambda x: x[1])
+                coach_d += (("不过「%s」一顿就占了全天碳水的 %d%%——松松说最大碳水该留给练后那餐（40–50%%），其它餐别堆，下次把主食往练后挪。" % (mn, pct))
+                            if is_train else
+                            ("提醒：今天没练、没有练后窗口，「%s」却占了全天碳水 %d%%——休息日碳水要摊匀到各餐（每顿别超约 1/3）、先吃菜再吃主食，别集中在一顿。" % (mn, pct)))
     else:
         coach_d = "记几餐后，这里会按松松框架，对你当天实际的吃法做点评。"
 
