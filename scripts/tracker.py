@@ -14,9 +14,11 @@
   correct --date D --field weight_kg --value 60.0    # 更正 weight/days 字段
   delete  --table meals --date D [--index N]         # 删除某条/某日记录
   render                                             # 重新生成看板
+  cardio  --rest-hr 70 --hr 130 [--weight 60] [--minutes 45] [--hours-per-week 2]  # 有氧心率消耗(Excel sheet16)
+  1rm     --weight 50 --reps 10 [--sex 女]           # 最大力量预测(Excel sheet24 九公式)+训练容量参考
 依赖:仅标准库。Python 3.9+。
 """
-import os, sys, csv, json, argparse, datetime, statistics, collections
+import os, sys, csv, json, argparse, datetime, statistics, collections, math
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REF_DIR = os.path.normpath(os.path.join(HERE, "..", "references"))
@@ -86,18 +88,33 @@ QUOTA_CFG = {
     ("维持", "女"): {"carb": (2.5, 3.0), "protein": (1.2, 1.5)},
     ("维持", "男"): {"carb": (2.5, 3.5), "protein": (1.5, 2.0)},
 }
-def quota_calc(weight, sex, phase, day):
+# D13 大体重起始配额下调(仅减脂期):BMI 分档压低碳水起始区间(松松:大体重低配额——体重变大主要是脂肪,
+# 单位体重基代/活动消耗都更低)。档位下限=上限-0.3 保留递减空间;此档休息日碳水改 -0.3(女版配额表大体重行
+# 训练/休息差≈0.3,沿用 -0.5 会跌穿表值)。起始偏保守是松松本意("算出来偏低是故意的"),两周趋势反馈再校正。
+BMI_CARB_CAP = [(32, {"男": 2.0, "女": 1.7}), (28, {"男": 2.5, "女": 2.1})]
+def quota_calc(weight, sex, phase, day, height_cm=None):
     cfg = QUOTA_CFG.get((phase, sex)) or QUOTA_CFG[("减脂", "女")]
     clo, chi = cfg["carb"]
-    if day != "training": clo, chi = clo - 0.5, chi - 0.5     # 休息日碳水 -0.5g/kg
+    bmi_tier = None
+    if phase == "减脂" and height_cm:
+        bmi = weight / (height_cm / 100.0) ** 2
+        for th, caps in BMI_CARB_CAP:
+            if bmi > th:
+                cap = caps.get(sex, caps["女"])
+                if cap < chi:
+                    chi = cap; clo = min(clo, round(chi - 0.3, 1)); bmi_tier = "BMI>%d" % th
+                break
+    rest_step = 0.3 if bmi_tier else 0.5
+    if day != "training": clo, chi = clo - rest_step, chi - rest_step  # 休息日碳水下调
     plo, phi = cfg["protein"]
     return {"carb_low": round(clo*weight), "carb_high": round(chi*weight), "carb_g": round((clo+chi)/2*weight),
             "protein_low": round(plo*weight), "protein_high": round(phi*weight), "protein_g": round((plo+phi)/2*weight),
-            "phase": phase, "sex": sex}
+            "phase": phase, "sex": sex, "bmi_tier": bmi_tier}
 def quota(weight, profile, day):
-    """按 性别×阶段×训练日 返回碳蛋脂配额区间(下限/目标/上限)。"""
+    """按 性别×阶段×训练日(×BMI 档)返回碳蛋脂配额区间(下限/目标/上限)。"""
     if not weight: return None
-    return quota_calc(weight, profile.get("sex", "女"), profile.get("phase", "减脂"), day)
+    return quota_calc(weight, profile.get("sex", "女"), profile.get("phase", "减脂"), day,
+                      profile.get("height_cm"))
 def fat_target(weight, profile):
     return round(profile.get("fat_g_per_kg", 0.8) * weight)
 
@@ -296,6 +313,96 @@ def cmd_delete(args):
     write_csv(args.table + ".csv", rows)
     return {"deleted": {args.table: args.date, "index": args.index}}
 
+# ---------- 命令:cardio(有氧心率消耗,松松 Excel sheet16 心率法) ----------
+# 每kg体重每小时活动热量 = 活动心率÷静息心率×6.4 − 6.2;总消耗 = ×体重×大体重衰减系数。
+# 衰减系数誊自 Excel 原表列公式:≤85kg×1.0、90×0.98、95×0.96、100×0.94、105×0.92、110+×0.90
+# (原表 115kg 列 0.92 破坏单调、疑笔误,按 0.90 处理)。原表验证范围:静息 60–85、运动 120–170。
+def cardio_calc(rest_hr, hr, weight):
+    per_kg = hr / rest_hr * 6.4 - 6.2
+    decay = 1.0
+    for th, d in [(110, 0.90), (105, 0.92), (100, 0.94), (95, 0.96), (90, 0.98)]:
+        if weight >= th: decay = d; break
+    return per_kg, decay, per_kg * weight * decay
+
+def cmd_cardio(args):
+    weight = args.weight
+    if weight is None:
+        series = weight_series()
+        if series: weight = series[-1][1]
+    if weight is None:
+        return {"error": "缺体重:传 --weight 或先记一条体重"}
+    per_kg, decay, kcal_h = cardio_calc(args.rest_hr, args.hr, weight)
+    if per_kg <= 0:
+        return {"error": "运动心率太接近静息心率,该公式不适用(几乎没有额外消耗)"}
+    out = {"rest_hr": args.rest_hr, "hr": args.hr, "weight_kg": weight,
+           "kcal_per_kg_per_h": round(per_kg, 2), "big_weight_decay": decay,
+           "kcal_per_hour": round(kcal_h)}
+    if args.minutes:
+        out["minutes"] = args.minutes
+        out["kcal_session"] = round(kcal_h * args.minutes / 60)
+    if args.hours_per_week:
+        extra = kcal_h * args.hours_per_week / 7
+        out["hours_per_week"] = args.hours_per_week
+        out["daily_extra_eat_kcal"] = round(extra)  # 给原本无有氧的方案加饮食:每周消耗÷7
+        out["food_equiv_per_100kcal"] = "80g熟米饭 / 80g瘦熟肉 / 1个苹果(香蕉/柑橘) / 1.5个鸡蛋 / 大半盒全脂牛奶 / 20g坚果"
+    notes = []
+    if not (60 <= args.rest_hr <= 85): notes.append("静息心率超出原表验证范围(60–85),结果仅供参考")
+    if not (120 <= args.hr <= 170): notes.append("运动心率超出原表验证范围(120–170),结果仅供参考")
+    notes.append("减脂目的有氧建议心率≈120(脂肪氧化峰值);每周<4小时、放在力量之后")
+    out["notes"] = notes
+    return out
+
+# ---------- 命令:1rm(最大力量预测,松松 Excel sheet24 九公式) ----------
+# 来源论文:Accuracy of 1RM Prediction Equations Before and After Resistance Training in Three Different Lifts。
+# 适用:自由卧推/深蹲,输入做组配重 + 该配重的力竭次数(动作全程接近完全标准)。
+RM_FORMULAS = {
+    "Adams":    lambda w, r: w / (1 - 0.02 * r),
+    "Brown":    lambda w, r: (r * 0.0328 + 0.9849) * w,
+    "Brzycki":  lambda w, r: w / (1.0278 - 0.0278 * r),
+    "Lander":   lambda w, r: w / (1.013 - 0.0267123 * r),
+    "Lombardi": lambda w, r: r ** 0.1 * w,
+    "Mayhew":   lambda w, r: w / (0.522 + 0.419 * math.exp(-0.055 * r)),
+    "O'Connor": lambda w, r: 0.025 * w * r + w,
+    "Wathen":   lambda w, r: w / (0.488 + 0.538 * math.exp(-0.075 * r)),
+    "Welday":   lambda w, r: 0.0333 * r * w + w,
+}
+RM_FEMALE = ["Brown", "Brzycki", "Lander"]   # Excel 标注:对女性较准确
+RM_MALE = ["Lombardi"]                       # Excel 标注:对男性较准确
+
+def cmd_1rm(args):
+    w, r = args.weight, args.reps
+    if r < 1 or w <= 0: return {"error": "配重需>0、力竭次数需≥1"}
+    sex = args.sex
+    if sex is None:
+        try: sex = load_profile().get("sex")
+        except Exception: pass
+    est = {}
+    for name, f in RM_FORMULAS.items():
+        try:
+            v = f(w, r)
+            est[name] = round(v, 1) if v > 0 else None
+        except (ZeroDivisionError, OverflowError):
+            est[name] = None
+    vals = [v for v in est.values() if v]
+    out = {"weight": w, "reps": r, "estimates": est,
+           "median_1rm": round(statistics.median(vals), 1) if vals else None}
+    if sex == "女":
+        sv = [est[n] for n in RM_FEMALE if est.get(n)]
+        if sv: out["recommended_1rm"] = {"sex": "女", "formulas": RM_FEMALE, "value": round(statistics.mean(sv), 1)}
+    elif sex == "男":
+        sv = [est[n] for n in RM_MALE if est.get(n)]
+        if sv: out["recommended_1rm"] = {"sex": "男", "formulas": RM_MALE, "value": round(statistics.mean(sv), 1)}
+    notes = ["适用自由卧推/深蹲;输入'做组配重+该配重力竭次数',动作全程接近完全标准"]
+    if r > 12: notes.append("力竭次数>12 时各公式误差明显变大,建议用 6–12 次的组来估")
+    out["notes"] = notes
+    out["volume_ref"] = {  # 松松训练容量参数(框架§8/三分化表)
+        "周频率": "每周 3–5 次合适,6 次极限;每周至少留 1–2 天完全休息",
+        "分化": "新手三分化(3 天 1 循环),有底子四分化",
+        "组数": "大肌群≈9 组、小肌群≈6 组;单次≤20 组、约 1–1.5 小时(三分化单次约 21 组)",
+        "强度": "以 6–12RM 为主;五大项(卧推/划船/硬拉/深蹲/推举)偶尔 3–5RM 增力组",
+    }
+    return out
+
 def cmd_render():
     import subprocess
     bd = os.path.join(HERE, "build_dashboard.py")
@@ -317,6 +424,11 @@ def main():
     c = sub.add_parser("correct"); c.add_argument("--date", required=True); c.add_argument("--field", required=True); c.add_argument("--value", required=True)
     d = sub.add_parser("delete"); d.add_argument("--table", required=True); d.add_argument("--date", required=True); d.add_argument("--index", type=int)
     sub.add_parser("render")
+    ca = sub.add_parser("cardio"); ca.add_argument("--rest-hr", type=float, required=True)
+    ca.add_argument("--hr", type=float, required=True); ca.add_argument("--weight", type=float)
+    ca.add_argument("--minutes", type=float); ca.add_argument("--hours-per-week", type=float)
+    rm = sub.add_parser("1rm"); rm.add_argument("--weight", type=float, required=True)
+    rm.add_argument("--reps", type=int, required=True); rm.add_argument("--sex", choices=["女", "男"])
     a = ap.parse_args()
 
     if a.cmd == "quota":
@@ -334,6 +446,8 @@ def main():
     elif a.cmd == "correct": out = cmd_correct(a); cmd_render()
     elif a.cmd == "delete": out = cmd_delete(a); cmd_render()
     elif a.cmd == "render": out = cmd_render()
+    elif a.cmd == "cardio": out = cmd_cardio(a)
+    elif a.cmd == "1rm": out = cmd_1rm(a)
     else: ap.print_help(); return
     print(json.dumps(out, ensure_ascii=False, indent=2))
 

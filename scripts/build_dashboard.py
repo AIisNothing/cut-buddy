@@ -65,16 +65,30 @@ QUOTA_CFG = {
     ("维持", "女"): {"carb": (2.5, 3.0), "protein": (1.2, 1.5)},
     ("维持", "男"): {"carb": (2.5, 3.5), "protein": (1.5, 2.0)},
 }
+# D13 大体重起始配额下调(仅减脂期),与 tracker.py 同步:BMI 分档压低碳水起始区间;
+# 档位下限=上限-0.3;此档休息日碳水改 -0.3(女版配额表大体重行训练/休息差≈0.3)。
+BMI_CARB_CAP = [(32, {"男": 2.0, "女": 1.7}), (28, {"男": 2.5, "女": 2.1})]
 def quota_for(weight, profile, day):
     if not weight: return None
     sex, phase = profile.get("sex", "女"), profile.get("phase", "减脂")
     cfg = QUOTA_CFG.get((phase, sex)) or QUOTA_CFG[("减脂", "女")]
     clo, chi = cfg["carb"]
-    if day != "training": clo, chi = clo - 0.5, chi - 0.5
+    bmi_tier = None
+    height_cm = profile.get("height_cm")
+    if phase == "减脂" and height_cm:
+        bmi = weight / (height_cm / 100.0) ** 2
+        for th, caps in BMI_CARB_CAP:
+            if bmi > th:
+                cap = caps.get(sex, caps["女"])
+                if cap < chi:
+                    chi = cap; clo = min(clo, round(chi - 0.3, 1)); bmi_tier = "BMI>%d" % th
+                break
+    rest_step = 0.3 if bmi_tier else 0.5
+    if day != "training": clo, chi = clo - rest_step, chi - rest_step
     plo, phi = cfg["protein"]
     return {"carb_g": round((clo+chi)/2*weight), "protein_g": round((plo+phi)/2*weight),
             "carb_low": round(clo*weight), "carb_high": round(chi*weight),
-            "protein_low": round(plo*weight), "protein_high": round(phi*weight)}
+            "protein_low": round(plo*weight), "protein_high": round(phi*weight), "bmi_tier": bmi_tier}
 
 def weight_series():
     out = []
