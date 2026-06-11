@@ -229,9 +229,15 @@ def build_all():
     coach_w = "松松看体重只看 1–2 周趋势、不看单日。"
     if status == "降": coach_w += "你 7 日均稳稳向下、没到平台，按现在的节奏走就好。"
     elif status == "观察": coach_w += "近期基本持平，再观察一周，先别急着调。"
-    elif status == "平台": coach_w += "连续两三周没动，可考虑碳水降 0.3–0.5g/kg（蛋白脂肪不动），或加点有氧。"
+    elif status == "平台": coach_w += "连续两三周没动。松松铁律:先跑「不掉秤9查」排查执行(定量没?混合菜拆了没?隐形脂肪?有氧没做?水果没扣主食?外食/喝酒?)——确认是真没缺口了,再每天少吃约150kcal(≈100g米饭+1全蛋)或每周加约1000kcal有氧;碳水降到2g/kg为止,别激进砍。"
     elif status == "升": coach_w += "略升先别慌，多半是水分或执行，看两周再判断。"
     else: coach_w += "数据还不到一周，先记着，趋势会清晰起来。"
+    # 减脂终点:接近健康 BMI 时提示考虑转增肌(松松:别追更低体重/体脂)
+    if profile.get("phase", "减脂") == "减脂" and profile.get("height_cm") and (ma_now or latest_w):
+        bmi = (ma_now or latest_w) / (profile["height_cm"] / 100.0) ** 2
+        bmi_floor = 20.0 if profile.get("sex", "女") == "女" else 22.0
+        if bmi <= bmi_floor + 1:
+            coach_w += "另外:你 BMI 已约 %.1f,接近松松说的减脂终点(女≈20–21/男≈22–23)。到这一带就别追更低体重了——腰腹脂肪本就最后掉,再硬减容易掉肌肉/像'骷髅兵',可考虑转增肌。" % bmi
 
     mstone = build_milestones(profile, latest_w, ma_now)
     # 里程碑彩蛋:仅在"新跨过"里程碑时弹一次(首次建档不为既有进度庆祝)
@@ -300,22 +306,24 @@ def build_diet(profile, mbd, wbd, L, latest_w):
     so_far = []; meal_judge = next_meal = day_kind = ""; judge_label = "这一餐"
     if todays and q:
         day_kind = "训练日" if is_train else "休息日"
+        fat_lo = round(fatT * 0.75)                     # 脂肪保底下限(松松:吃太少→激素/经期紊乱)
         def tag_macro(act, low, high, soft_high=False):  # 碳水/蛋白:区间判断(下限-上限)
             if act < low: return ("还差 %dg到下限" % round(low - act), "mut")
             if act <= high: return ("区间内 ✓", "ok")
             # 碳水超上限=硬警告(填平缺口);蛋白超上限=软(松松:蛋白可上探保肌、不易长胖)
             return ("已充足", "ok") if soft_high else ("超上限 %dg" % round(act - high), "warn")
-        def tag_fat(act):                              # 脂肪:目标 + 上限
+        def tag_fat(act):                              # 脂肪:下限–目标–上限
+            if act < fat_lo: return ("偏低·别戒油", "mut")   # 太低伤激素/经期
             if act <= fatT: return ("很稳", "ok")
             if act <= fat_hi: return ("适中", "ok")
-            return ("偏多·后面少油", "warn")
+            return ("超上限·后面少油", "warn")
         ct = tag_macro(tot["carb"], q["carb_low"], q["carb_high"])
         pt = tag_macro(tot["protein"], q["protein_low"], q["protein_high"], soft_high=True)
         ftg = tag_fat(tot["fat"])
         so_far = [
             {"name": "碳水", "act": round(tot["carb"]), "rng": "%d–%d" % (q["carb_low"], q["carb_high"]), "tag": ct[0], "cls": ct[1]},
             {"name": "蛋白", "act": round(tot["protein"]), "rng": "%d–%d" % (q["protein_low"], q["protein_high"]), "tag": pt[0], "cls": pt[1]},
-            {"name": "脂肪", "act": round(tot["fat"]), "rng": "≤%d" % round(fat_hi), "tag": ftg[0], "cls": ftg[1]},
+            {"name": "脂肪", "act": round(tot["fat"]), "rng": "%d–%d" % (fat_lo, fat_hi), "tag": ftg[0], "cls": ftg[1]},
         ]
         if len(bymeal) <= 1:
             mn = list(bymeal.keys())[0] if bymeal else "这餐"
@@ -368,6 +376,11 @@ def build_diet(profile, mbd, wbd, L, latest_w):
         smart = list(dict.fromkeys(f for f in foods_today if any(k in f for k in ("魔芋", "鸡胸", "鸡蛋", "黄瓜", "生菜", "蔬菜", "西兰花", "瘦肉"))))
         if smart:
             coach_d += "像 %s 这种高蛋白低脂、又顶饱的，正是松松推荐的好食材。" % "、".join(smart[:3])
+        # 脂肪刺客 / 高脂肉(松松:看不见的脂肪最易低估)
+        FAT_TRAPS = ("五花", "排骨", "肥牛", "肥羊", "培根", "香肠", "肉肠", "午餐肉", "肉丸", "油条", "蛋挞", "麦芬", "坚果", "花生", "薯片", "炸", "酥", "奶油", "黄油", "糖醋", "锅包", "红烧肉", "扣肉", "鸡皮", "鸭皮")
+        traps = list(dict.fromkeys(f for f in foods_today if any(k in f for k in FAT_TRAPS)))
+        if traps:
+            coach_d += "留意「%s」属高脂肉/糖油——松松说这类'看不见的脂肪'极占配额(宽油炒蛋1个就20–30g、两把坚果40g),记得如实计脂、别当瘦肉算。" % "、".join(traps[:3])
         if is_train:
             coach_d += "今天是训练日，把碳水主力放在练后那一餐（全天最大一份、练后 30 分钟内）。"
         # 日内碳水分配(松松第5节):非练后/练前的单顿碳水占全天≥40% → 提醒别堆
@@ -445,7 +458,7 @@ def build_calendar(L, wbd):
         if n >= 6: expl += "逼近松松说的上限（6 次极限、7 次自残），记得留 1–2 天完全休息，中枢神经也要恢复。"
         elif n >= 3: expl += "落在松松说的合适区间（每周 3–5 次）。"
         else: expl += "量不大，松松看来完全 OK。"
-        expl += "你体重不到 70kg，松松建议每周约 2 小时有氧，羽毛球 + 力量后爬坡基本够；减脂期力量配重别降，配重守住=肌肉守住。"
+        expl += "减脂期力量配重别降(配重守住=肌肉守住,大项配重掉=缺口太大或恢复不够的信号);有氧按体重来——≥80kg 靠吃就够、≤70kg 每周约 2 小时、70–80kg 看饿不饿,有氧每周别超 4 小时、放力量之后。"
     return {"year": y, "month": m, "weeks": weeks, "today_line": today_line, "expl": expl}
 
 def build_body(series):
