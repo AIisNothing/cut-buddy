@@ -891,9 +891,10 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .node .nl{font-size:10px;}
  .here b{font-size:10px;}
 }
-.tip-t{font-size:14px;font-weight:650;color:var(--ink);margin-bottom:5px;}
-.tip-b{font-size:13.5px;line-height:1.72;color:var(--t2);}
-.speed{margin-top:11px;font-size:13px;line-height:1.65;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
+.tip-t{font-size:15px;font-weight:650;color:var(--ink);margin-bottom:5px;}
+.tip-b{font-size:14.5px;line-height:1.7;color:var(--t2);}  /* 与 .body-t 同刻度:同级卡片正文必须同字号 */
+.speed{margin-top:11px;font-size:13.5px;line-height:1.65;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
+/* 字号刻度约定:正文级(body-t/tip-b/judge2)14.5 · 结论行(one)15 · 次级说明(coach/advice2/speed)13.5 · 提示(note)12.5 */
 .row2{display:block;}
 @media(min-width:880px){
  .wrap{max-width:1000px;}
@@ -953,8 +954,6 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .mv{font-size:16px;font-weight:650;letter-spacing:-.01em;} .mv .sl{font-size:12px;font-weight:400;color:var(--t3);margin-left:5px;}
 .ms{font-size:12px;font-weight:600;justify-self:end;}
 .ms.ok{color:var(--pos);} .ms.low{color:var(--t3);} .ms.warn{color:var(--warn);}
-.verdict{margin-top:13px;font-size:14.5px;line-height:1.65;color:var(--ink);}
-.advice{margin-top:10px;font-size:13px;line-height:1.6;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
 .note{padding:14px;background:#F7FAF7;border:1px dashed var(--weak);border-radius:12px;font-size:12.5px;color:var(--t3);line-height:1.7;}
 .body-t{font-size:14.5px;line-height:1.7;color:var(--t2);}
 .coach{margin-top:14px;background:#F6FAF7;border:1px solid #E4EFE7;border-radius:12px;padding:11px 14px;font-size:13.5px;line-height:1.72;color:var(--t2);}
