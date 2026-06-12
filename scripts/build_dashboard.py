@@ -613,25 +613,98 @@ def build_recap(series, mbd, wbd, L, rate):
     return txt
 
 def build_praise(profile, series, mbd, wbd, L, rate, diet):
+    """夸夸池:每条都由真实记录驱动(不空夸),凑齐当下成立的所有夸点,随机抽一条。"""
     pr = []
+    phase = profile.get("phase", "减脂")
+    latest_w = series[-1][1] if series else None
+    today = mbd.get(L.isoformat(), [])
+    is_train = any(w.get("is_strength") == "1" for w in wbd.get(L.isoformat(), []))
+    # ① 单顿蛋白堆得好
     if diet.get("has_today"):
-        tp = round(sum(float(m["protein"] or 0) for m in mbd.get(L.isoformat(), [])))
+        tp = round(sum(float(m["protein"] or 0) for m in today))
         if tp >= 35:
-            pr.append("今天吃得很会——一顿就把蛋白质堆到 %dg，是全天目标的一大半，保肌满分。" % tp)
-    if rate is not None and -0.7 <= rate <= -0.08:
-        pr.append("最近 7 日均稳稳往下，约 %.2f kg/周——不快不慢、不掉肌肉，这个减脂节奏你拿捏得特别好。" % abs(rate))
+            pr.append("今天吃得很会——蛋白质已经堆到 %dg，保肌满分。" % tp)
+    # ② 节奏(分阶段:减脂稳降/增肌稳涨/维持纹丝不动)
+    if rate is not None:
+        if phase == "减脂" and -0.7 <= rate <= -0.08:
+            pr.append("最近 7 日均稳稳往下，约 %.2f kg/周——不快不慢、不掉肌肉，这个减脂节奏你拿捏得特别好。" % abs(rate))
+        elif phase == "增肌" and 0.05 <= rate <= 0.45:
+            pr.append("周均稳稳往上 +%.2f kg/周——这是长肌肉的节奏，不是堆脂肪的速度，涨得很干净。" % rate)
+        elif phase == "维持" and abs(rate) <= 0.15:
+            pr.append("体重稳得像定海神针——维持期要的就是这份稳，说明你已经会吃了。")
+    # ③ 训练频率(近两周)
     cut = L - datetime.timedelta(days=14)
     tdays = set(ds for ds, wos in wbd.items() if pdate(ds) >= cut and any(w.get("is_rest") != "1" for w in wos))
     sdays = set(ds for ds, wos in wbd.items() if pdate(ds) >= cut and any(w.get("is_strength") == "1" for w in wos))
     if len(tdays) >= 4:
         extra = "（力量 %d 天）" % len(sdays) if sdays else ""
-        pr.append("最近运动很勤——近两周练了 %d 天%s，减脂期还坚持举铁保肌肉，很专业。" % (len(tdays), extra))
+        pr.append("最近运动很勤——近两周练了 %d 天%s，还坚持举铁保肌肉，很专业。" % (len(tdays), extra))
+    # ④ 连续称重打卡(streak)
     sdates = {x[0] for x in series}
-    if sum(1 for i in range(7) if (L - datetime.timedelta(days=i)) in sdates) >= 4:
+    streak, d = 0, L
+    while d in sdates: streak += 1; d -= datetime.timedelta(days=1)
+    if streak >= 5:
+        pr.append("连续 %d 天称重打卡——肯每天面对数字的人，没有减不下来的。" % streak)
+    elif sum(1 for i in range(7) if (L - datetime.timedelta(days=i)) in sdates) >= 4:
         pr.append("已经坚持记录好几天了——肯记录、肯面对数字，这件事本身就赢了一半。")
-    foods = [m["food"] for m in mbd.get(L.isoformat(), [])]
+    # ⑤ 聪明食物
+    foods = [m["food"] for m in today]
     if any(("魔芋" in f or "鸡胸" in f or "鸡蛋" in f) for f in foods):
         pr.append("食物也选得聪明——魔芋、鸡胸、鸡蛋这种高蛋白低脂的，又顶饱又不增负担。")
+    # ⑥ 蔬菜到位(松松:~100g 蔬菜≈2g 纤维,先菜后饭压胰岛素)
+    veg = sum(float(m["veg_g"] or 0) for m in today)
+    if veg >= 100:
+        pr.append("今天蔬菜吃了 %dg——先菜后饭压胰岛素这件事，你已经做在习惯里了。" % round(veg))
+    # ⑦ 全天蛋白进区间
+    if today and latest_w:
+        q = quota_for(latest_w, profile, "training" if is_train else "rest")
+        totp = sum(float(m["protein"] or 0) for m in today)
+        if q and totp >= q["protein_low"]:
+            pr.append("全天蛋白 %dg 已经进区间——肌肉的口粮给足了，掉的才是真脂肪。" % round(totp))
+    # ⑧ 练后窗口抓住了
+    if is_train and any(("练后" in m.get("meal", "")) for m in today):
+        pr.append("练后窗口的碳水安排上了——30 分钟内的这顿是全天最值钱的一餐，教科书级执行。")
+    # ⑨ 累计成果(从起点算)
+    start_w = profile.get("start_weight_kg")
+    if start_w and latest_w:
+        diffkg = round(start_w - latest_w, 1)
+        if phase == "减脂" and diffkg >= 1:
+            pr.append("从起点到现在已经甩掉 %.1f kg——相当于 %d 瓶 500ml 矿泉水，都是你一笔一笔记出来的。" % (diffkg, round(diffkg * 2)))
+        elif phase == "增肌" and -diffkg >= 1:
+            pr.append("从起点到现在已经涨了 %.1f kg——增肌是按月磨的慢功夫，你磨出来了。" % -diffkg)
+    # ⑩ 里程碑在望
+    ms_list = profile.get("milestones") or []
+    if latest_w and ms_list:
+        sign = -1 if phase == "增肌" else 1
+        todo = [m for m in ms_list if sign * (latest_w - m) > 0]
+        if todo:
+            dist = abs(latest_w - todo[0])
+            if dist <= 1:
+                pr.append("离下一个里程碑 %skg 只差 %.1f kg 了——胜利就在眼前，按现在的节奏走就行。" % (f1(todo[0]), dist))
+    # ⑪ 周均连降(减脂)——两周口径的"真在变好"
+    wks = weekly_avgs(series)
+    if phase == "减脂" and len(wks) >= 3 and wks[-1]["avg"] < wks[-2]["avg"] < wks[-3]["avg"]:
+        pr.append("周均已经连降两周——按松松的两周口径，这是板上钉钉的真下降，不是水分把戏。")
+    # ⑫ 体脂在掉(近4周,需体脂数据)
+    bfs = [(d, bf) for (d, w, bf, _) in series if bf is not None and (L - d).days <= 28]
+    if len(bfs) >= 2 and bfs[0][1] - bfs[-1][1] >= 0.5:
+        pr.append("近 4 周体脂率从 %.1f%% 走到 %.1f%%——肌肉守住、脂肪在掉，这就是减脂质量好的样子。" % (bfs[0][1], bfs[-1][1]))
+    # ⑬ 有氧适量(近7天,松松:每周<4小时、心率120最优)
+    c7 = L - datetime.timedelta(days=7)
+    cardio = sum(float(w.get("cardio_min") or 0) + (float(w.get("duration_min") or 0) if w.get("is_cardio") == "1" else 0)
+                 for ds, wos in wbd.items() if pdate(ds) > c7 for w in wos)
+    if 60 <= cardio <= 240:
+        pr.append("近一周有氧约 %d 分钟——量刚刚好，没超松松说的每周 4 小时上限，加得很克制。" % round(cardio))
+    # ⑭ 睡眠到位(今/昨,通用恢复常识,不署松松名)
+    dbd = days_by_date()
+    for ds in (L.isoformat(), (L - datetime.timedelta(days=1)).isoformat()):
+        rec = dbd.get(ds)
+        if rec and rec.get("sleep_h"):
+            try:
+                sh = float(rec["sleep_h"])
+                if sh >= 7:
+                    pr.append("睡够了 %s 小时——恢复到位,训练和食欲都会更听话,这也是减脂的一部分。" % f1(sh)); break
+            except ValueError: pass
     if not pr:
         pr.append("愿意为自己花心思、肯坚持，这份认真本身就很值得夸。")
     return {"line": random.choice(pr)}
