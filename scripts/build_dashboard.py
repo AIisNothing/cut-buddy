@@ -817,14 +817,13 @@ def render(D):
     pattern_block = (c_sub("最近 30 天") + "<div class='body-t'>%s</div>" % esc(di["pattern_text"])) if show_pattern else ""
     body_chart = "<div class='cv sm'><canvas id='cBody' role='img' aria-label='身体成分趋势:瘦体重(虚线)与脂肪量(实线)双轴折线图'></canvas></div>" if bo["has"] else ""
 
-    # —— 用统一组件拼装整页 ——
-    head = "<div class='head'><div class='upd'>更新至 %s</div><h1>%s</h1><div class='answer'>%s</div></div>" % (
-        esc(D["updated"]), esc(mst["question"]), esc(mst["answer"]))
+    # —— 用统一组件拼装整页(Bento 层级:英雄卡=第一眼焦点) ——
     c_milestone = c_card(milestone_html(mst), "里程碑 · 三个目标")
     stats = (c_stat("今日体重", f1(t["weight"]), "kg") + c_stat("7 日均重", f1(t["ma7"]), "kg", "ma")
              + "<div class='stat tr'><div class='l'>趋势</div>%s</div>" % c_tag(t["trend_label"]))
-    c_status = c_card("<div class='stats'>%s</div><div class='one'>%s</div><div class='speed'>%s</div>" % (
-        stats, esc(t["one"]), esc(t["speed"])), "今日状态")
+    c_hero = ("<div class='card hero'><div class='upd'>更新至 %s</div><h1>%s</h1><div class='answer'>%s</div>"
+              "<div class='stats'>%s</div><div class='one'>%s</div><div class='speed'>%s</div></div>") % (
+        esc(D["updated"]), esc(mst["question"]), esc(mst["answer"]), stats, esc(t["one"]), esc(t["speed"]))
     weight_kv = ("<div class='kv'><div class='row'><span class='k'>今日变化</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>可能原因</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>是否调整</span><span>%s</span></div></div>") % (
@@ -840,11 +839,19 @@ def render(D):
         esc(bo["summary"]), body_chart, c_coach(bo["coach"])), "身体成分", cls="")
     c_supp = c_card(supp_html(supp), cls=("praise-card" if supp["kind"] == "praise" else ""))
     c_recap = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结", cls="")
-    # 宽幅三栏(≥1360px 一屏放下全部内容,整页截一张图即可分享);窄屏自动退化为单列
-    col1 = "<div class='wcol'>%s%s%s</div>" % (c_status, c_weight, c_diettrend)
-    col2 = "<div class='wcol'>%s</div>" % c_diet
-    col3 = "<div class='wcol'>%s%s%s%s</div>" % (c_calendar, c_bodycomp, c_supp, c_recap)
-    body_html = head + c_milestone + "<div class='wide'>%s%s%s</div>" % (col1, col2, col3)
+    # Bento 三段式(≥1360px;窄屏自动退化为单列竖排,阅读顺序不变):
+    #  R1 第一眼:英雄卡(问句+答案+大数字) | 里程碑    R2 证据:体重趋势大图 | 夸夸+身体成分
+    #  R3 细看:今日饮食 | 7天饮食趋势 | 日历+小结
+    band1 = "<div class='b1'>%s%s</div>" % (c_hero, c_milestone)
+    band2 = ("<div class='b2'><div class='bcell bmain'>%s</div><div class='bcell'>%s%s</div></div>"
+             % (c_weight, c_supp, c_bodycomp))
+    if c_diettrend:
+        band3 = ("<div class='b3'><div class='bcell'>%s</div><div class='bcell'>%s</div><div class='bcell'>%s%s</div></div>"
+                 % (c_diet, c_diettrend, c_calendar, c_recap))
+    else:
+        band3 = ("<div class='b3 b3two'><div class='bcell'>%s</div><div class='bcell'>%s%s</div></div>"
+                 % (c_diet, c_calendar, c_recap))
+    body_html = band1 + band2 + band3
 
     out = TEMPLATE.replace("/*DATA*/", json.dumps(D["charts"], ensure_ascii=False)).replace("__BODY__", body_html)
     out = out.replace("数据本地存储 · ~/Documents/cut-buddy-data", foot)
@@ -928,18 +935,16 @@ html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 body{margin:0;background:var(--bg);color:var(--ink);
  font:15px/1.65 'Nunito Sans','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:.005em;}
-h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nunito Sans','PingFang SC','Hiragino Sans GB',sans-serif;}
+h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nunito Sans','PingFang SC','Hiragino Sans GB',sans-serif;}
 .wrap{max-width:540px;margin:0 auto;padding:30px 18px 80px;}
-.head{margin-bottom:22px;}
-.head h1{font-size:19px;font-weight:650;letter-spacing:-.01em;margin:0 0 3px;}
-.head .sb{color:var(--t3);font-size:12px;} .head .up{color:var(--t3);font-size:11px;margin-top:3px;}
 .card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:22px;margin-bottom:16px;
  animation:rise .5s cubic-bezier(.2,.7,.2,1) both;}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
 @media(prefers-reduced-motion:reduce){.card{animation:none}}
-.head .upd{font-size:11px;color:var(--t3);letter-spacing:.04em;margin-bottom:7px;}
-.head h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;}
-.head .answer{font-size:24px;font-weight:700;color:var(--accent);margin-top:2px;letter-spacing:-.01em;}
+/* 英雄卡:整页第一眼焦点(问句+答案+今日体重大数字) */
+.hero .upd{font-size:11px;color:var(--t3);letter-spacing:.04em;margin-bottom:8px;}
+.hero h1{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:0;}
+.hero .answer{font-size:26px;font-weight:700;color:var(--accent-d);margin:2px 0 16px;letter-spacing:-.01em;}
 .msbar{position:relative;margin:56px 24px 4px;}
 .track2{position:relative;height:8px;background:var(--weak);border-radius:8px;}
 .fill2{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent-l),var(--accent-d));border-radius:8px;}
@@ -971,18 +976,30 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .tip-b{font-size:14.5px;line-height:1.7;color:var(--t2);}  /* 与 .body-t 同刻度:同级卡片正文必须同字号 */
 .speed{margin-top:11px;font-size:13.5px;line-height:1.65;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
 /* 字号刻度约定:正文级(body-t/tip-b/judge2)14.5 · 结论行(one)15 · 次级说明(coach/advice2/speed)13.5 · 提示(note)12.5 */
-/* 宽幅三栏:默认(窄屏)栏容器透明化,卡片照旧单列竖排;≥1360px 变三栏、一屏容纳全部内容,
-   整页截图即一张可分享的宽图。各栏末卡弹性补高 → 三栏底边恒对齐。 */
-.wide,.wcol{display:contents;}
+/* Bento 三段式(分享视图):默认(窄屏)容器透明化、卡片单列竖排;≥1360px 进入便当盒布局——
+   R1 英雄卡|里程碑 → R2 趋势大图|夸夸+身体成分 → R3 饮食|7天趋势|日历+小结。
+   各格末卡弹性补高 → 每段底边恒对齐,整页截图即一张层级清晰的分享宽图。 */
+.b1,.b2,.b3,.bcell{display:contents;}
 @media(min-width:880px){
  .wrap{max-width:1000px;}
  .span2 .stats{gap:48px;}
 }
 @media(min-width:1360px){
- .wrap{max-width:1760px;padding-left:28px;padding-right:28px;}
- .wide{display:grid;grid-template-columns:1fr 1.18fr 1fr;gap:0 16px;align-items:stretch;}
- .wcol{display:flex;flex-direction:column;min-width:0;}
- .wcol>.card:last-child{flex:1;}
+ .wrap{max-width:1680px;padding-left:28px;padding-right:28px;}
+ .b1{display:grid;grid-template-columns:5fr 7fr;gap:0 16px;align-items:stretch;}
+ .b2{display:grid;grid-template-columns:7fr 5fr;gap:0 16px;align-items:stretch;}
+ .b3{display:grid;grid-template-columns:5fr 3fr 4fr;gap:0 16px;align-items:stretch;}
+ .b3.b3two{grid-template-columns:6fr 6fr;}
+ .bcell{display:flex;flex-direction:column;min-width:0;}
+ .bcell>.card:last-child{flex:1;}
+ .b1>.card{display:flex;flex-direction:column;justify-content:center;}
+ .b1>.hero{justify-content:flex-start;}
+ .hero h1{font-size:24px;}
+ .hero .answer{font-size:32px;}
+ .hero .stat .v{font-size:48px;}
+ .hero .stat.ma .v{font-size:28px;}
+ .bmain>.card{display:flex;flex-direction:column;}
+ .bmain .cv{flex:1;height:auto;min-height:260px;}
 }
 .mt{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.13em;text-transform:uppercase;margin:0 0 16px;}
 /* 今日状态 */
