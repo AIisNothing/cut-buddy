@@ -38,7 +38,7 @@ git clone https://github.com/AIisNothing/cut-buddy.git ~/.claude/skills/cut-budd
 
 详见 [PRD.md](./PRD.md)（产品需求文档）和 [CHANGELOG.md](./CHANGELOG.md)。
 
-另有一份图文版使用说明书：👉 [在线查看 PRD.html](https://aiisnothing.github.io/cut-buddy/PRD.html)（装好后首次建档时也会自动在浏览器打开本地版）。
+👉 [掉秤搭子说明书](https://aiisnothing.github.io/cut-buddy/PRD.html)（图文版在线说明书；装好后首次建档时也会自动在浏览器打开本地版）。
 
 ## 数据与隐私
 
