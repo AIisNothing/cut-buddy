@@ -839,19 +839,15 @@ def render(D):
         esc(bo["summary"]), body_chart, c_coach(bo["coach"])), "身体成分", cls="")
     c_supp = c_card(supp_html(supp), cls=("praise-card" if supp["kind"] == "praise" else ""))
     c_recap = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结", cls="")
-    # Bento 三段式(≥1360px;窄屏自动退化为单列竖排,阅读顺序不变):
-    #  R1 第一眼:英雄卡(问句+答案+大数字) | 里程碑    R2 证据:体重趋势大图 | 夸夸+身体成分
-    #  R3 细看:今日饮食 | 7天饮食趋势 | 日历+小结
+    # Bento 两段式·全量一页(≥1360px 目标内容高 ≤900px,普通笔记本一屏透底;窄屏退化单列):
+    #  R1 第一眼:英雄卡 | 里程碑
+    #  R2 四栏:[体重趋势+小结] [今日饮食] [7天趋势+身体成分] [日历+夸夸]
     band1 = "<div class='b1'>%s%s</div>" % (c_hero, c_milestone)
-    band2 = ("<div class='b2'><div class='bcell bmain'>%s</div><div class='bcell'>%s%s</div></div>"
-             % (c_weight, c_supp, c_bodycomp))
-    if c_diettrend:
-        band3 = ("<div class='b3'><div class='bcell'>%s</div><div class='bcell'>%s</div><div class='bcell'>%s%s</div></div>"
-                 % (c_diet, c_diettrend, c_calendar, c_recap))
-    else:
-        band3 = ("<div class='b3 b3two'><div class='bcell'>%s</div><div class='bcell'>%s%s</div></div>"
-                 % (c_diet, c_calendar, c_recap))
-    body_html = band1 + band2 + band3
+    band2 = ("<div class='b4'>"
+             "<div class='bcell'>%s%s</div><div class='bcell narrowdiet'>%s</div>"
+             "<div class='bcell'>%s%s</div><div class='bcell'>%s%s</div></div>"
+             % (c_weight, c_recap, c_diet, c_diettrend, c_bodycomp, c_calendar, c_supp))
+    body_html = band1 + band2
 
     out = TEMPLATE.replace("/*DATA*/", json.dumps(D["charts"], ensure_ascii=False)).replace("__BODY__", body_html)
     out = out.replace("数据本地存储 · ~/Documents/cut-buddy-data", foot)
@@ -979,27 +975,57 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 /* Bento 三段式(分享视图):默认(窄屏)容器透明化、卡片单列竖排;≥1360px 进入便当盒布局——
    R1 英雄卡|里程碑 → R2 趋势大图|夸夸+身体成分 → R3 饮食|7天趋势|日历+小结。
    各格末卡弹性补高 → 每段底边恒对齐,整页截图即一张层级清晰的分享宽图。 */
-.b1,.b2,.b3,.bcell{display:contents;}
+.b1,.b2,.b3,.b4,.bcell{display:contents;}
 @media(min-width:880px){
  .wrap{max-width:1000px;}
  .span2 .stats{gap:48px;}
 }
 @media(min-width:1360px){
  .wrap{max-width:1680px;padding-left:28px;padding-right:28px;}
- .b1{display:grid;grid-template-columns:5fr 7fr;gap:0 16px;align-items:stretch;}
- .b2{display:grid;grid-template-columns:7fr 5fr;gap:0 16px;align-items:stretch;}
- .b3{display:grid;grid-template-columns:5fr 3fr 4fr;gap:0 16px;align-items:stretch;}
- .b3.b3two{grid-template-columns:6fr 6fr;}
+ .b1{display:grid;grid-template-columns:4fr 8fr;gap:0 14px;align-items:stretch;}
+ .b2{display:grid;grid-template-columns:6fr 6fr;gap:0 14px;align-items:stretch;}
+ .b3{display:grid;grid-template-columns:38fr 33fr 29fr;gap:0 14px;align-items:stretch;}
+ .b4{display:grid;grid-template-columns:31fr 25fr 22fr 22fr;gap:0 14px;align-items:stretch;}
  .bcell{display:flex;flex-direction:column;min-width:0;}
  .bcell>.card:last-child{flex:1;}
  .b1>.card{display:flex;flex-direction:column;justify-content:center;}
  .b1>.hero{justify-content:flex-start;}
- .hero h1{font-size:24px;}
- .hero .answer{font-size:32px;}
- .hero .stat .v{font-size:48px;}
- .hero .stat.ma .v{font-size:28px;}
- .bmain>.card{display:flex;flex-direction:column;}
- .bmain .cv{flex:1;height:auto;min-height:260px;}
+ .hero h1{font-size:21px;}
+ .hero .answer{font-size:28px;margin-bottom:8px;}
+ .hero .stat .v{font-size:42px;}
+ .hero .stat.ma .v{font-size:24px;}
+ .cv{height:205px;}
+ /* 窄格里的饮食卡:内部改单列(双列会挤破) */
+ .narrowdiet .diet-grid{grid-template-columns:1fr;gap:10px;}
+ /* —— 紧凑密度:层级靠英雄区撑,其余全面收紧,目标整页 ~1100px 高、笔记本一屏透底 —— */
+ .wrap{padding-top:14px;padding-bottom:22px;}
+ .card{padding:13px 16px;margin-bottom:11px;}
+ .mt{margin-bottom:10px;}
+ .coach{margin-top:8px;padding:6px 10px;font-size:12px;line-height:1.55;}
+ .speed{margin-top:8px;font-size:12.5px;line-height:1.55;}
+ .one{font-size:14px;}
+ .stats{margin-bottom:10px;gap:24px;}
+ .msbar{margin:50px 20px 2px;}
+ /* kv 三行并一行(分享视图寸土寸金) */
+ .kv{margin-top:8px;display:flex;flex-wrap:wrap;gap:3px 22px;}
+ .kv .row{padding:2px 0;font-size:13px;border-top:none;}
+ .range{margin-bottom:4px;}
+ .cv.sm{height:92px;}
+ .body-t{font-size:13.5px;line-height:1.55;}
+ .tip-t{font-size:14px;margin-bottom:3px;} .tip-b{font-size:13.5px;line-height:1.55;}
+ .pz-big{font-size:15.5px;line-height:1.5;margin-top:6px;}
+ .judge2{margin-top:9px;font-size:13.5px;line-height:1.55;} .advice2{margin-top:6px;font-size:12.5px;line-height:1.5;}
+ .diet-grid{gap:14px;}
+ .diary{gap:7px;}
+ .meal{padding:6px 9px;gap:8px;}
+ .mtile{width:32px;height:32px;font-size:16px;border-radius:8px;} .mthumb{width:34px;height:34px;border-radius:8px;}
+ .mn{margin-bottom:1px;} .mfi{font-size:13px;} .mlist{line-height:1.45;} .mnut{margin-top:2px;}
+ .macro{margin-top:8px;padding:7px 10px;} .mr{padding:2px 0;} .mv{font-size:14px;}
+ .diet-right{padding:10px 13px;} .sf-strip{gap:7px;} .sf-item b{font-size:16px;}
+ table.cal{border-spacing:2px;} table.cal td{height:31px;padding:2px 3px;border-radius:6px;}
+ .dn{font-size:9px;} .chip{font-size:8.5px;padding:0 3px;margin-top:1px;}
+ .note{padding:7px 10px;font-size:11px;line-height:1.5;}
+ .foot{margin-top:8px;}
 }
 .mt{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.13em;text-transform:uppercase;margin:0 0 16px;}
 /* 今日状态 */
@@ -1134,6 +1160,16 @@ if(D.showBody && D.fat.length){
     y:yax({position:'left',grace:'12%'}),
     y1:yax({position:'right',grace:'12%',grid:{drawOnChartArea:false}})}}});
 }
+// 一屏自适应:宽屏下内容比窗口高就整体等比缩小,打开即见全部、零滚动(窄屏/手机不缩)
+function cbFit(){
+  if(innerWidth<1360){document.body.style.zoom='';return;}
+  document.body.style.zoom='';
+  var h=document.documentElement.scrollHeight;
+  var z=Math.max(0.55,Math.min(1,innerHeight/h));
+  document.body.style.zoom=(z<1)?z:'';
+}
+addEventListener('resize',function(){clearTimeout(window.__cbft);window.__cbft=setTimeout(cbFit,120);});
+cbFit();
 </script>
 __CELEBRATE__
 </body></html>"""
