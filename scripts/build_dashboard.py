@@ -809,11 +809,11 @@ def render(D):
 
     d_left, d_right = diet_html(di), diet_right_html(di)
     d_coach = di["coach"]; tr_cause = tr["cause"]; recap_txt = recap
-    foot = "数据本地存储 · ~/Documents/cut-buddy-data"
+    foot = "掉秤搭子 cut-buddy · 一笔一笔记出来的"   # 落款不带本地路径,截图分享出去也干净
     show_trend, show_pattern = di["show_trend"], di["show_pattern"]
 
-    # 数据不足时整段隐藏(数据够了自动回来)
-    trend_block = (c_sub("最近 7 天") + "<div class='body-t'>%s</div><div class='cv sm'><canvas id='cKcal' role='img' aria-label='最近7天每日热量柱状图与均值线'></canvas></div><div class='cv sm'><canvas id='cMacro' role='img' aria-label='最近7天蛋白与脂肪摄入折线图'></canvas></div>" % esc(di["week_text"])) if show_trend else ""
+    # 数据不足时整段隐藏(数据够了自动回来);独立成卡放"趋势"栏,与今日饮食卡分开
+    trend_block = ("<div class='body-t'>%s</div><div class='cv sm'><canvas id='cKcal' role='img' aria-label='最近7天每日热量柱状图与均值线'></canvas></div><div class='cv sm'><canvas id='cMacro' role='img' aria-label='最近7天蛋白与脂肪摄入折线图'></canvas></div>" % esc(di["week_text"])) if show_trend else ""
     pattern_block = (c_sub("最近 30 天") + "<div class='body-t'>%s</div>" % esc(di["pattern_text"])) if show_pattern else ""
     body_chart = "<div class='cv sm'><canvas id='cBody' role='img' aria-label='身体成分趋势:瘦体重(虚线)与脂肪量(实线)双轴折线图'></canvas></div>" if bo["has"] else ""
 
@@ -831,17 +831,20 @@ def render(D):
                  esc(tr["chg"]), esc(tr_cause), esc(tr["adj"]))
     c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight' role='img' aria-label='体重趋势:单日散点(弱化)与7日均线(主线)'></canvas></div>%s%s" % (
         weight_kv, c_coach(tr["coach"])), "体重趋势")
-    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s%s" % (
-        d_left, d_right, c_coach(d_coach), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱")
+    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s" % (
+        d_left, d_right, c_coach(d_coach), pattern_block), "饮食 · 今日吃饭小日记 🍱")
+    c_diettrend = c_card(trend_block, "饮食趋势 · 最近 7 天") if trend_block else ""
     c_calendar = c_card("<div class='body-t' style='margin-bottom:12px'>%s</div>%s%s" % (
         esc(ca["today_line"]), cal_html(ca), c_coach(ca["expl"])), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="")
     c_bodycomp = c_card("<div class='body-t'>%s</div>%s%s" % (
         esc(bo["summary"]), body_chart, c_coach(bo["coach"])), "身体成分", cls="")
     c_supp = c_card(supp_html(supp), cls=("praise-card" if supp["kind"] == "praise" else ""))
     c_recap = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结", cls="")
-    row2 = "<div class='row2'><div class='col'>%s</div><div class='col'>%s%s%s</div></div>" % (
-        c_calendar, c_bodycomp, c_supp, c_recap)
-    body_html = head + c_milestone + c_status + c_weight + c_diet + row2
+    # 宽幅三栏(≥1360px 一屏放下全部内容,整页截一张图即可分享);窄屏自动退化为单列
+    col1 = "<div class='wcol'>%s%s%s</div>" % (c_status, c_weight, c_diettrend)
+    col2 = "<div class='wcol'>%s</div>" % c_diet
+    col3 = "<div class='wcol'>%s%s%s%s</div>" % (c_calendar, c_bodycomp, c_supp, c_recap)
+    body_html = head + c_milestone + "<div class='wide'>%s%s%s</div>" % (col1, col2, col3)
 
     out = TEMPLATE.replace("/*DATA*/", json.dumps(D["charts"], ensure_ascii=False)).replace("__BODY__", body_html)
     out = out.replace("数据本地存储 · ~/Documents/cut-buddy-data", foot)
@@ -968,13 +971,18 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .tip-b{font-size:14.5px;line-height:1.7;color:var(--t2);}  /* 与 .body-t 同刻度:同级卡片正文必须同字号 */
 .speed{margin-top:11px;font-size:13.5px;line-height:1.65;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
 /* 字号刻度约定:正文级(body-t/tip-b/judge2)14.5 · 结论行(one)15 · 次级说明(coach/advice2/speed)13.5 · 提示(note)12.5 */
-.row2{display:block;}
+/* 宽幅三栏:默认(窄屏)栏容器透明化,卡片照旧单列竖排;≥1360px 变三栏、一屏容纳全部内容,
+   整页截图即一张可分享的宽图。各栏末卡弹性补高 → 三栏底边恒对齐。 */
+.wide,.wcol{display:contents;}
 @media(min-width:880px){
  .wrap{max-width:1000px;}
  .span2 .stats{gap:48px;}
- .row2{display:flex;gap:14px;align-items:stretch;}
- .row2>.col{flex:1;min-width:0;display:flex;flex-direction:column;}
- .row2>.col>.card:last-child{flex:1;}  /* 各列末卡吃掉剩余高度→两列底边对齐 */
+}
+@media(min-width:1360px){
+ .wrap{max-width:1760px;padding-left:28px;padding-right:28px;}
+ .wide{display:grid;grid-template-columns:1fr 1.18fr 1fr;gap:0 16px;align-items:stretch;}
+ .wcol{display:flex;flex-direction:column;min-width:0;}
+ .wcol>.card:last-child{flex:1;}
 }
 .mt{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.13em;text-transform:uppercase;margin:0 0 16px;}
 /* 今日状态 */
