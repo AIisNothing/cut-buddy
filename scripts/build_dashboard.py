@@ -7,7 +7,7 @@
 内容:饮食按松松配额判断三大营养素是否达标、给调整建议。
 模块:今日状态 → 体重趋势 → 饮食 → 活动日历 → 身体成分 → 阶段回顾。
 """
-import os, csv, json, html, datetime, statistics, collections, calendar as _cal, re, shutil, subprocess
+import os, csv, json, html, datetime, statistics, collections, calendar as _cal, re, shutil, subprocess, random
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REF_DIR = os.path.normpath(os.path.join(HERE, "..", "references"))
@@ -578,8 +578,8 @@ TIPS = [
     ("不掉秤先查执行", "两周不掉先别怀疑方案：是不是没定量？水果没扣主食？偷吃了高脂肉/糖油？有氧没做？都排除了才考虑缺口不够。"),
 ]
 
-def build_tip(L):
-    t = TIPS[L.toordinal() % len(TIPS)]
+def build_tip():
+    t = random.choice(TIPS)   # 每次刷新随机一条,看板常看常新
     return {"title": t[0], "body": t[1]}
 
 def build_recap(series, mbd, wbd, L, rate):
@@ -634,15 +634,15 @@ def build_praise(profile, series, mbd, wbd, L, rate, diet):
         pr.append("食物也选得聪明——魔芋、鸡胸、鸡蛋这种高蛋白低脂的，又顶饱又不增负担。")
     if not pr:
         pr.append("愿意为自己花心思、肯坚持，这份认真本身就很值得夸。")
-    return {"line": pr[L.toordinal() % len(pr)]}
+    return {"line": random.choice(pr)}
 
-ANCHOR = datetime.date(2026, 6, 9)
 def build_supp(profile, series, mbd, wbd, L, rate, diet):
-    if (L - ANCHOR).days % 2 == 0:
+    # 每次刷新随机出 夸夸/小课堂 之一,内容也随机——让"记一笔刷新一次"常有新鲜感
+    if random.random() < 0.5:
         p = build_praise(profile, series, mbd, wbd, L, rate, diet)
         return {"kind": "praise", "line": p["line"]}
-    t = build_tip(L)
-    return {"kind": "tip", "title": "松松小课堂 · 每日一条", "tip_t": t["title"], "tip_b": t["body"]}
+    t = build_tip()
+    return {"kind": "tip", "title": "松松小课堂 · 随机一条", "tip_t": t["title"], "tip_b": t["body"]}
 
 # ---------- 渲染 ----------
 def cal_html(cal):
