@@ -36,7 +36,9 @@ git clone https://github.com/AIisNothing/cut-buddy.git ~/.claude/skills/cut-budd
 - **🧭 科学指导** —— 按 性别 × 阶段（减脂/增肌/维持）给配额区间，大体重（BMI>28/32）自动下调起始配额；7 日均 + 周均看真趋势；平台期排查；附 有氧心率消耗 / 1RM 最大力量 两个小算盘
 - **🤝 看板陪伴** —— 本地可视化看板 + 每日夸夸
 
-详见 [PRD.md](./PRD.md)（产品需求文档）/ [PRD.html](./PRD.html)（图文说明书）/ [CHANGELOG.md](./CHANGELOG.md)。
+详见 [PRD.md](./PRD.md)（产品需求文档）和 [CHANGELOG.md](./CHANGELOG.md)。
+
+另有一份图文版使用说明书 `PRD.html`，装好后**首次建档时会自动在浏览器打开**（GitHub 上直接点 .html 文件只会显示源码，这是 GitHub 的安全限制，不渲染仓库内 HTML）。想先睹为快可以看[在线渲染版](https://htmlpreview.github.io/?https://github.com/AIisNothing/cut-buddy/blob/main/PRD.html)。
 
 ## 数据与隐私
 
