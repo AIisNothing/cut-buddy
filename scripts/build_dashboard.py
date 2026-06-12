@@ -273,7 +273,9 @@ def build_all():
         "weightDaily": [{"x": ms(d), "y": w} for (d, w, _, _) in series],
         "ma7": [{"x": ms(d), "y": ma7_at(series, d)} for (d, w, _, _) in series],
         "target": mstone["next_goal"],
-        "minx": ms(series[0][0]), "maxx": ms(L), "defaultLo": max(ms(series[0][0]), ms(L - datetime.timedelta(days=120))),
+        "minx": ms(series[0][0]), "maxx": ms(L),
+        "lo4w": max(ms(series[0][0]), ms(L - datetime.timedelta(days=28))),
+        "lo4m": max(ms(series[0][0]), ms(L - datetime.timedelta(days=120))),
         "kcalDaily": diet["kcalDaily"], "kcalAvg": diet["kcalAvg"],
         "proteinDaily": diet["proteinDaily"], "fatDaily": diet["fatDaily"], "showDietChart": diet["show_trend"],
         "bf": body["bf_series"], "fat": body["fat_series"], "lean": body["lean_series"], "showBody": body["has"]}
@@ -738,9 +740,9 @@ def render(D):
     show_trend, show_pattern = di["show_trend"], di["show_pattern"]
 
     # 数据不足时整段隐藏(数据够了自动回来)
-    trend_block = (c_sub("最近 7 天") + "<div class='body-t'>%s</div><div class='cv sm'><canvas id='cKcal'></canvas></div><div class='cv sm'><canvas id='cMacro'></canvas></div>" % esc(di["week_text"])) if show_trend else ""
+    trend_block = (c_sub("最近 7 天") + "<div class='body-t'>%s</div><div class='cv sm'><canvas id='cKcal' role='img' aria-label='最近7天每日热量柱状图与均值线'></canvas></div><div class='cv sm'><canvas id='cMacro' role='img' aria-label='最近7天蛋白与脂肪摄入折线图'></canvas></div>" % esc(di["week_text"])) if show_trend else ""
     pattern_block = (c_sub("最近 30 天") + "<div class='body-t'>%s</div>" % esc(di["pattern_text"])) if show_pattern else ""
-    body_chart = "<div class='cv sm'><canvas id='cBody'></canvas></div>" if bo["has"] else ""
+    body_chart = "<div class='cv sm'><canvas id='cBody' role='img' aria-label='身体成分趋势:瘦体重(虚线)与脂肪量(实线)双轴折线图'></canvas></div>" if bo["has"] else ""
 
     # —— 用统一组件拼装整页 ——
     head = "<div class='head'><div class='upd'>更新至 %s</div><h1>%s</h1><div class='answer'>%s</div></div>" % (
@@ -754,7 +756,7 @@ def render(D):
                  "<div class='row'><span class='k'>可能原因</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>是否调整</span><span>%s</span></div></div>") % (
                  esc(tr["chg"]), esc(tr_cause), esc(tr["adj"]))
-    c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight'></canvas></div>%s%s" % (
+    c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight' role='img' aria-label='体重趋势:单日散点(弱化)与7日均线(主线)'></canvas></div>%s%s" % (
         weight_kv, c_coach(tr["coach"])), "体重趋势")
     c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s%s" % (
         d_left, d_right, c_coach(d_coach), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱")
@@ -782,24 +784,25 @@ def celebrate_html(c):
 
 CELEBRATE_TMPL = r"""
 <div id="celebrate" style="position:fixed;inset:0;z-index:9999;
- background:radial-gradient(120% 90% at 50% 18%, rgba(18,33,24,.92), rgba(8,12,10,.95));">
+ background:radial-gradient(120% 90% at 50% 18%, rgba(38,27,18,.92), rgba(14,10,7,.95));">
 <canvas id="fwc" style="position:fixed;inset:0;display:block;"></canvas>
 <div onclick="cbHide()" style="position:fixed;right:18px;top:16px;z-index:2;width:38px;height:38px;border-radius:50%;
  cursor:pointer;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:20px;line-height:36px;text-align:center;">✕</div>
 <div class="cbcard">
  <div style="font-size:54px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.4))">🎉</div>
- <div style="font-size:12px;letter-spacing:.35em;color:#8FE0B6;font-weight:700;margin-top:12px;">里程碑达成</div>
- <div style="font-size:29px;font-weight:800;margin:10px 0 2px;">恭喜__NAME__！__VERB__ <span style="color:#7CE0AA">__GOAL__ kg</span></div>
- <div style="font-size:15px;color:#D7E5DC;line-height:1.75;margin-top:8px;">__LINE__</div>
+ <div style="font-size:12px;letter-spacing:.35em;color:#F4C690;font-weight:700;margin-top:12px;">里程碑达成</div>
+ <div style="font-size:29px;font-weight:800;margin:10px 0 2px;">恭喜__NAME__！__VERB__ <span style="color:#F0B27A">__GOAL__ kg</span></div>
+ <div style="font-size:15px;color:#EFE2D2;line-height:1.75;margin-top:8px;">__LINE__</div>
 </div>
 <div style="position:fixed;left:0;right:0;bottom:16px;text-align:center;color:rgba(255,255,255,.4);font-size:12px;">点 ✕ / 空白处 / 按 Esc 关闭，回到看板</div>
 </div>
 <style>
 .cbcard{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.85);opacity:0;text-align:center;color:#fff;
- background:rgba(22,33,26,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);
+ background:rgba(40,29,20,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);
  border-radius:26px;padding:34px 40px;box-shadow:0 24px 70px rgba(0,0,0,.45);max-width:88vw;
  animation:cbpop .7s cubic-bezier(.2,.9,.2,1.1) .2s forwards;}
 @keyframes cbpop{to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
+@media(prefers-reduced-motion:reduce){.cbcard{animation:none;transform:translate(-50%,-50%);opacity:1;}}
 </style>
 <script>
 (function(){
@@ -818,7 +821,8 @@ CELEBRATE_TMPL = r"""
  window.cbHide=function(){ov.style.display='none';if(raf){cancelAnimationFrame(raf);raf=null;}};
  ov.addEventListener('click',function(e){if(e.target===ov||e.target===cv)cbHide();});
  addEventListener('keydown',function(e){if(e.key==='Escape')cbHide();});
- frame();go();
+ // 尊重系统"减弱动态效果":不放烟花,只静态展示祝贺卡
+ if(!matchMedia('(prefers-reduced-motion: reduce)').matches){frame();go();}
 })();
 </script>"""
 
@@ -827,15 +831,18 @@ TEMPLATE = r"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <script src="./assets/chart.umd.min.js"></script>
 <style>
 :root{
- /* 色板 */
- --bg:#F4F6F3;--card:#FFFFFF;--ink:#1A1C19;--t2:#5C6159;--t3:#9AA09A;--line:#EAEDE8;
- --accent:#3C8C66;--accent-d:#2E7355;--soft:#E9F2EC;--warn:#C8824E;
+ /* 色板 · 暖陪跑风(Nature Distilled,见 docs/DESIGN-SYSTEM.md) */
+ --bg:#F5F0E1;--card:#FFFCF5;--ink:#3D2E22;--t2:#6E5C4B;--t3:#8A7866;--line:#EDE3D0;
+ --accent:#C67B5C;--accent-d:#B5651D;--soft:#F3E8D8;--warn:#B5651D;
+ --pos:#6B7B3C;--pos-d:#57652C;--pos-soft:#EDF0DC;          /* 正向反馈:掉秤/达标/训练日 */
+ --sand:#D4C4A8;--praise:#FAE8D4;
+ --shadow:0 2px 12px rgba(91,64,38,.08);
  /* 状态色:日历格子 & 活动 chip —— 全部集中一处,杜绝撞色 */
- --cell:#FAFBFA;--cell-today:#FFFFFF;
- --chip-train:var(--soft);--chip-train-t:var(--accent-d);
+ --cell:#FBF6EA;--cell-today:#FFFCF5;
+ --chip-train:var(--pos-soft);--chip-train-t:var(--pos-d);
  --chip-cardio:#F3EBDF;--chip-cardio-t:#9A6E3C;
- --chip-rest:#EEF0ED;--chip-rest-t:var(--t3);
- --chip-other:#EDEFEC;--chip-other-t:var(--t2);
+ --chip-rest:#F1EADB;--chip-rest-t:var(--t3);
+ --chip-other:#EFE8D8;--chip-other-t:var(--t2);
  /* 间距刻度 / 圆角(组件统一引用) */
  --s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;
  --r:16px;--r-sm:12px;
@@ -843,36 +850,38 @@ TEMPLATE = r"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 *{box-sizing:border-box}
 html{-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
 body{margin:0;background:var(--bg);color:var(--ink);
- font:14px/1.6 -apple-system,BlinkMacSystemFont,"SF Pro SC","SF Pro Text","PingFang SC","Microsoft YaHei",sans-serif;
+ font:15px/1.65 'Nunito Sans','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
  font-variant-numeric:tabular-nums;font-feature-settings:"tnum" 1;letter-spacing:.005em;}
+h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nunito Sans','PingFang SC','Hiragino Sans GB',sans-serif;}
 .wrap{max-width:540px;margin:0 auto;padding:30px 18px 80px;}
 .head{margin-bottom:22px;}
 .head h1{font-size:19px;font-weight:650;letter-spacing:-.01em;margin:0 0 3px;}
 .head .sb{color:var(--t3);font-size:12px;} .head .up{color:var(--t3);font-size:11px;margin-top:3px;}
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:12px;
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);padding:22px;margin-bottom:16px;
  animation:rise .5s cubic-bezier(.2,.7,.2,1) both;}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.card{animation:none}}
 .head .upd{font-size:11px;color:var(--t3);letter-spacing:.04em;margin-bottom:7px;}
 .head h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;}
 .head .answer{font-size:24px;font-weight:700;color:var(--accent);margin-top:2px;letter-spacing:-.01em;}
 .msbar{position:relative;margin:56px 24px 4px;}
-.track2{position:relative;height:8px;background:#E9EDE6;border-radius:8px;}
-.fill2{position:absolute;left:0;top:0;height:100%;background:var(--accent);border-radius:8px;}
-.here{position:absolute;top:4px;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 1px 4px rgba(0,0,0,.18);transform:translate(-50%,-50%);z-index:4;}
+.track2{position:relative;height:8px;background:var(--sand);border-radius:8px;}
+.fill2{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-d));border-radius:8px;}
+.here{position:absolute;top:4px;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 1px 4px rgba(91,64,38,.25);transform:translate(-50%,-50%);z-index:4;}
 .here b{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--accent-d);white-space:nowrap;}
 .node{position:absolute;top:4px;z-index:2;}
-.node .pole{position:absolute;left:0;top:-22px;width:2px;height:22px;background:#C9D0C7;transform:translateX(-50%);border-radius:2px;}
+.node .pole{position:absolute;left:0;top:-22px;width:2px;height:22px;background:var(--sand);transform:translateX(-50%);border-radius:2px;}
 .node .flag{position:absolute;left:0;top:-45px;transform:translateX(-50%);min-width:34px;height:25px;padding:0 9px;
- display:flex;align-items:baseline;justify-content:center;gap:1px;border-radius:8px;background:#fff;border:1.5px solid #C9D0C7;
- color:var(--t2);font-size:14px;font-weight:700;box-shadow:0 2px 5px rgba(40,46,30,.10);}
+ display:flex;align-items:baseline;justify-content:center;gap:1px;border-radius:8px;background:#fff;border:1.5px solid var(--sand);
+ color:var(--t2);font-size:14px;font-weight:700;box-shadow:0 2px 5px rgba(91,64,38,.10);}
 .node .flag i{font-style:normal;font-size:9px;font-weight:600;color:var(--t3);}
 .node .nl{position:absolute;top:24px;left:0;transform:translateX(-50%);font-size:10.5px;color:var(--t3);white-space:nowrap;}
-.node.done .flag{background:var(--accent);border-color:var(--accent);color:#fff;} .node.done .flag i{color:#dbe7df;}
-.node.done .pole{background:var(--accent);} .node.done .nl{color:var(--accent);}
-.node.now .flag{border-color:var(--accent);border-width:2px;color:var(--accent-d);box-shadow:0 0 0 4px var(--soft),0 2px 5px rgba(40,46,30,.10);}
-.node.now .flag i{color:var(--accent);} .node.now .pole{background:var(--accent);} .node.now .nl{color:var(--accent-d);font-weight:700;}
-.node.start .flag{background:#EEF0EA;border-color:#D6DBD2;color:var(--t2);} .node.start .flag i{color:var(--t3);}
-.node.start .pole{background:#CCD2C9;} .node.start .nl{color:var(--t3);}
+.node.done .flag{background:var(--pos);border-color:var(--pos);color:#fff;} .node.done .flag i{color:#E4E9D2;}
+.node.done .pole{background:var(--pos);} .node.done .nl{color:var(--pos-d);}
+.node.now .flag{border-color:var(--accent-d);border-width:2px;color:var(--accent-d);box-shadow:0 0 0 4px var(--soft),0 2px 5px rgba(91,64,38,.10);}
+.node.now .flag i{color:var(--accent-d);} .node.now .pole{background:var(--accent-d);} .node.now .nl{color:var(--accent-d);font-weight:700;}
+.node.start .flag{background:#F1EADB;border-color:var(--sand);color:var(--t2);} .node.start .flag i{color:var(--t3);}
+.node.start .pole{background:var(--sand);} .node.start .nl{color:var(--t3);}
 /* 首尾节点贴边对齐，避免旗子/文字飘到卡片外 */
 .node.start .flag,.node.start .nl{transform:translateX(0);left:-2px;}
 .node.end .flag,.node.end .nl{transform:translateX(-100%);left:2px;}
@@ -900,7 +909,7 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .stat .v .u{font-size:13px;font-weight:500;color:var(--t3);margin-left:3px;}
 .stat.ma .v{font-size:22px;font-weight:600;color:var(--accent);}
 .stat.tr{margin-left:auto;text-align:right;}
-.tag{display:inline-block;background:var(--soft);color:var(--accent-d);border-radius:8px;padding:5px 11px;font-size:12px;font-weight:600;}
+.tag{display:inline-block;background:var(--pos);color:#fff;border-radius:99px;padding:4px 12px;font-size:12px;font-weight:600;}
 .one{font-size:15px;line-height:1.55;color:var(--t2);}
 /* 体重三行 */
 .kv{margin-top:14px;}
@@ -909,17 +918,19 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .kv .k{color:var(--t3);font-size:12px;letter-spacing:.04em;width:56px;flex:none;}
 .cv{position:relative;height:220px;margin:6px 0 2px;} .cv.sm{height:150px;}
 .range{display:flex;gap:8px;margin-bottom:8px;}
-.range button{background:transparent;border:1px solid var(--line);color:var(--t3);border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;}
-.range button.on{background:var(--ink);color:#fff;border-color:var(--ink);}
+.range button{background:transparent;border:1px solid var(--line);color:var(--t3);border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer;
+ transition:border-color .2s ease-out,color .2s ease-out;}
+.range button:hover{border-color:var(--accent);color:var(--accent-d);}
+.range button.on{background:var(--accent-d);color:#fff;border-color:var(--accent-d);}
 .sub{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.13em;text-transform:uppercase;margin:20px 0 10px;}
 /* 饮食日记 · 2×2 方格 */
 .diet-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;}
 @media(max-width:600px){.diet-grid{grid-template-columns:1fr;gap:16px;}}
 .diary{display:flex;flex-direction:column;gap:10px;}
-.meal{display:flex;gap:11px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:13px;background:#FCFDFC;}
+.meal{display:flex;gap:11px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:13px;background:#FDF9F0;}
 .mvis{flex:none;}
 .mtile{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:25px;
- background:linear-gradient(135deg,#F1F6EF,#E9F1EB);border:1px solid #E4ECE5;}
+ background:linear-gradient(135deg,#F8EFE0,#F3E7D4);border:1px solid #EBDFC9;}
 .mthumb{width:54px;height:54px;border-radius:13px;object-fit:cover;border:1px solid var(--line);
  filter:saturate(1.05) contrast(1.02);display:block;}
 .mbody{min-width:0;flex:1;}
@@ -928,28 +939,28 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .mfi{font-size:14px;font-weight:600;}
 .sep{color:var(--t3);opacity:.55;margin:0 7px;font-weight:400;}
 .mnut{font-size:11px;color:var(--t3);margin-top:5px;}
-.meal.empty{background:#FAFBF9;} .meal.empty .mtile{opacity:.5;} .meal.empty .mbody{opacity:.6;}
+.meal.empty{background:#FBF6EA;} .meal.empty .mtile{opacity:.5;} .meal.empty .mbody{opacity:.6;}
 .mf-empty{font-size:14px;color:var(--t3);}
-.praise-card{background:linear-gradient(135deg,#FFF3DB,#FFE6CB);border:1px solid #F6D5B3;position:relative;overflow:hidden;}
+.praise-card{background:var(--praise);border:1.5px solid var(--accent);position:relative;overflow:hidden;}
 .praise-card .pz-deco{position:absolute;right:8px;top:-6px;font-size:50px;opacity:.22;transform:rotate(8deg);pointer-events:none;}
-.pz-h{position:relative;font-size:11.5px;font-weight:800;letter-spacing:.1em;color:#C2772E;}
-.pz-big{position:relative;font-size:16.5px;line-height:1.62;font-weight:650;color:#7C4A1E;margin-top:10px;}
+.pz-h{position:relative;font-size:11.5px;font-weight:800;letter-spacing:.1em;color:var(--accent-d);}
+.pz-big{position:relative;font-size:17px;line-height:1.62;font-weight:650;color:#6E4226;margin-top:10px;}
 /* 三大营养素达标 */
-.macro{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:#FCFDFC;}
+.macro{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:#FDF9F0;}
 .mttl{font-size:11px;color:var(--t3);letter-spacing:.06em;margin-bottom:9px;}
 .mr{display:grid;grid-template-columns:48px 1fr auto;align-items:baseline;gap:10px;padding:5px 0;}
 .mk{color:var(--t2);font-size:13px;}
 .mv{font-size:16px;font-weight:650;letter-spacing:-.01em;} .mv .sl{font-size:12px;font-weight:400;color:var(--t3);margin-left:5px;}
 .ms{font-size:12px;font-weight:600;justify-self:end;}
-.ms.ok{color:var(--accent);} .ms.low{color:var(--t3);} .ms.warn{color:var(--warn);}
+.ms.ok{color:var(--pos);} .ms.low{color:var(--t3);} .ms.warn{color:var(--warn);}
 .verdict{margin-top:13px;font-size:14.5px;line-height:1.65;color:var(--ink);}
 .advice{margin-top:10px;font-size:13px;line-height:1.6;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
-.note{padding:14px;background:#FAFBFA;border:1px dashed var(--line);border-radius:12px;font-size:12.5px;color:var(--t3);line-height:1.7;}
-.body-t{font-size:14px;line-height:1.7;color:var(--t2);}
-.coach{margin-top:14px;background:#F2F6F1;border:1px solid #E3EDE5;border-radius:12px;padding:11px 14px;font-size:13px;line-height:1.72;color:var(--t2);}
-.coach-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--accent-d);background:#E1EFE6;padding:2px 8px;border-radius:6px;margin-right:8px;letter-spacing:.05em;}
+.note{padding:14px;background:#FBF6EA;border:1px dashed var(--sand);border-radius:12px;font-size:12.5px;color:var(--t3);line-height:1.7;}
+.body-t{font-size:14.5px;line-height:1.7;color:var(--t2);}
+.coach{margin-top:14px;background:#F7F0E3;border:1px solid #ECE0CA;border-radius:12px;padding:11px 14px;font-size:13.5px;line-height:1.72;color:var(--t2);}
+.coach-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--accent-d);background:#F2E3CE;padding:2px 8px;border-radius:6px;margin-right:8px;letter-spacing:.05em;}
 /* 饮食 · 截至目前(横向铺平) */
-.diet-right{padding:14px 16px;background:#FCFDFC;border:1px solid var(--line);border-radius:13px;}
+.diet-right{padding:14px 16px;background:#FDF9F0;border:1px solid var(--line);border-radius:13px;}
 .sf-h{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.13em;text-transform:uppercase;margin:0 0 12px;}
 .sf-strip{display:flex;flex-direction:column;gap:11px;}
 .sf-item{display:flex;align-items:baseline;gap:5px;}
@@ -957,8 +968,8 @@ body{margin:0;background:var(--bg);color:var(--ink);
 .sf-item b{font-size:18px;font-weight:700;letter-spacing:-.01em;}
 .sf-item i{font-size:11px;color:var(--t3);font-style:normal;}
 .sf-item em{font-size:11px;font-weight:600;font-style:normal;margin-left:1px;}
-.sf-item em.ok{color:var(--accent);} .sf-item em.mut{color:var(--t3);} .sf-item em.warn{color:var(--warn);}
-.judge2{margin-top:15px;font-size:14px;line-height:1.7;color:var(--ink);}
+.sf-item em.ok{color:var(--pos);} .sf-item em.mut{color:var(--t3);} .sf-item em.warn{color:var(--warn);}
+.judge2{margin-top:15px;font-size:14.5px;line-height:1.7;color:var(--ink);}
 .advice2{margin-top:11px;font-size:13.5px;line-height:1.65;color:var(--t2);}
 .jt{display:inline-block;font-size:11px;font-weight:700;color:var(--accent-d);background:var(--soft);padding:2px 8px;border-radius:6px;margin-right:8px;}
 /* 日历 */
@@ -981,42 +992,46 @@ __BODY__
 </div>
 <script>
 const D=/*DATA*/;
+Chart.defaults.font.family="'Nunito Sans','PingFang SC','Hiragino Sans GB',sans-serif";
 function fd(m){return new Date(m).toISOString().slice(5,10);}
 // 悬浮提示标题统一显示成"月-日"(否则会弹出原始时间戳那串大数字)
 Chart.defaults.plugins.tooltip.callbacks=Chart.defaults.plugins.tooltip.callbacks||{};
 Chart.defaults.plugins.tooltip.callbacks.title=function(its){return (its&&its.length)?fd(its[0].parsed.x):'';};
-const GRID='#EEF1EC',TICK='#9AA09A';
+const GRID='#EBE2CE',TICK='#8A7866';
 const AX={type:'linear',ticks:{color:TICK,maxTicksLimit:6,font:{size:10},callback:v=>fd(v)},grid:{color:GRID,drawTicks:false},border:{display:false}};
 function yax(o){return Object.assign({ticks:{color:TICK,font:{size:10}},grid:{color:GRID,drawTicks:false},border:{display:false}},o||{});}
 const LEG={labels:{color:TICK,boxWidth:10,boxHeight:10,font:{size:10},usePointStyle:true,pointStyle:'circle'}};
 let wc;
 function drawWeight(lo,hi){
   const cfg={data:{datasets:[
-    {type:'line',label:'目标',data:[{x:D.minx,y:D.target},{x:D.maxx,y:D.target}],borderColor:'#CBD2C9',borderDash:[5,5],borderWidth:1,pointRadius:0},
-    {type:'scatter',label:'每日',data:D.weightDaily,pointRadius:1.4,pointBackgroundColor:'#CBD2C9',borderColor:'#CBD2C9'},
-    {type:'line',label:'7 日均',data:D.ma7,borderColor:'#3C8C66',borderWidth:2.5,pointRadius:0,tension:.3},
+    {type:'line',label:'目标',data:[{x:D.minx,y:D.target},{x:D.maxx,y:D.target}],borderColor:'#CBB89A',borderDash:[5,5],borderWidth:1,pointRadius:0},
+    {type:'scatter',label:'每日',data:D.weightDaily,pointRadius:2.2,pointBackgroundColor:'#D4C4A8',borderColor:'#D4C4A8'},
+    {type:'line',label:'7 日均',data:D.ma7,borderColor:'#C67B5C',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(198,123,92,0.12)'},
   ]},options:{maintainAspectRatio:false,plugins:{legend:Object.assign({},LEG,{labels:Object.assign({},LEG.labels,{filter:i=>i.text!=='目标'})})},
     scales:{x:Object.assign({},AX,{min:lo,max:hi}),y:yax({})}}};
   if(wc)wc.destroy(); wc=new Chart(document.getElementById('cWeight'),cfg);
 }
-drawWeight(D.defaultLo,D.maxx);
+// 档位:近4周(默认)/近4月/全部;数据不够长的档位与「全部」重合,自动隐藏
+const ranges=[['近 4 周',D.lo4w],['近 4 月',D.lo4m]].filter(r=>r[1]>D.minx);
+ranges.push(['全部',D.minx]);
+drawWeight(ranges[0][1],D.maxx);
 const rd=document.getElementById('range');
-[['近 4 月',D.defaultLo],['全部',D.minx]].forEach(([t,lo],i)=>{const b=document.createElement('button');b.textContent=t;if(i===0)b.classList.add('on');
+ranges.forEach(([t,lo],i)=>{const b=document.createElement('button');b.textContent=t;if(i===0)b.classList.add('on');
   b.onclick=()=>{[...rd.children].forEach(c=>c.classList.remove('on'));b.classList.add('on');drawWeight(lo,D.maxx);};rd.appendChild(b);});
 if(D.showDietChart && D.kcalDaily.length){
   new Chart(document.getElementById('cKcal'),{data:{datasets:[
-    {type:'bar',label:'每日热量',data:D.kcalDaily,backgroundColor:'#D7E5DC',borderRadius:4},
-    D.kcalAvg?{type:'line',label:'均值',data:[{x:D.kcalDaily[0].x,y:D.kcalAvg},{x:D.kcalDaily[D.kcalDaily.length-1].x,y:D.kcalAvg}],borderColor:'#3C8C66',borderWidth:1.5,pointRadius:0}:null
+    {type:'bar',label:'每日热量',data:D.kcalDaily,backgroundColor:'#EAD9C0',borderRadius:4},
+    D.kcalAvg?{type:'line',label:'均值',data:[{x:D.kcalDaily[0].x,y:D.kcalAvg},{x:D.kcalDaily[D.kcalDaily.length-1].x,y:D.kcalAvg}],borderColor:'#C67B5C',borderWidth:1.5,pointRadius:0}:null
   ].filter(Boolean)},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,y:yax({})}}});
   new Chart(document.getElementById('cMacro'),{data:{datasets:[
-    {type:'line',label:'蛋白 g',data:D.proteinDaily,borderColor:'#3C8C66',borderWidth:2,pointRadius:2,tension:.3},
-    {type:'line',label:'脂肪 g',data:D.fatDaily,borderColor:'#C8824E',borderWidth:2,pointRadius:2,tension:.3},
+    {type:'line',label:'蛋白 g',data:D.proteinDaily,borderColor:'#6B7B3C',borderWidth:2,pointRadius:2,tension:.3},
+    {type:'line',label:'脂肪 g',data:D.fatDaily,borderColor:'#B5651D',borderWidth:2,pointRadius:2,tension:.3,borderDash:[6,4]},
   ]},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,y:yax({})}}});
 }
 if(D.showBody && D.fat.length){
   new Chart(document.getElementById('cBody'),{data:{datasets:[
-    {type:'line',label:'瘦体重 kg',data:D.lean,borderColor:'#3C8C66',borderWidth:2,pointRadius:0,yAxisID:'y'},
-    {type:'line',label:'脂肪量 kg',data:D.fat,borderColor:'#C8824E',borderWidth:2,pointRadius:1.4,pointBackgroundColor:'#C8824E',yAxisID:'y1'},
+    {type:'line',label:'瘦体重 kg',data:D.lean,borderColor:'#6B7B3C',borderWidth:2.5,pointRadius:0,yAxisID:'y',borderDash:[6,4],tension:.3},
+    {type:'line',label:'脂肪量 kg',data:D.fat,borderColor:'#B5651D',borderWidth:2.5,pointRadius:1.6,pointBackgroundColor:'#B5651D',yAxisID:'y1',tension:.3},
   ]},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,
     y:yax({position:'left',grace:'12%'}),
     y1:yax({position:'right',grace:'12%',grid:{drawOnChartArea:false}})}}});
