@@ -784,21 +784,21 @@ def celebrate_html(c):
 
 CELEBRATE_TMPL = r"""
 <div id="celebrate" style="position:fixed;inset:0;z-index:9999;
- background:radial-gradient(120% 90% at 50% 18%, rgba(38,27,18,.92), rgba(14,10,7,.95));">
+ background:radial-gradient(120% 90% at 50% 18%, rgba(18,33,24,.92), rgba(8,12,10,.95));">
 <canvas id="fwc" style="position:fixed;inset:0;display:block;"></canvas>
 <div onclick="cbHide()" style="position:fixed;right:18px;top:16px;z-index:2;width:38px;height:38px;border-radius:50%;
  cursor:pointer;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.2);font-size:20px;line-height:36px;text-align:center;">✕</div>
 <div class="cbcard">
  <div style="font-size:54px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.4))">🎉</div>
- <div style="font-size:12px;letter-spacing:.35em;color:#F4C690;font-weight:700;margin-top:12px;">里程碑达成</div>
- <div style="font-size:29px;font-weight:800;margin:10px 0 2px;">恭喜__NAME__！__VERB__ <span style="color:#F0B27A">__GOAL__ kg</span></div>
- <div style="font-size:15px;color:#EFE2D2;line-height:1.75;margin-top:8px;">__LINE__</div>
+ <div style="font-size:12px;letter-spacing:.35em;color:#8FE0B6;font-weight:700;margin-top:12px;">里程碑达成</div>
+ <div style="font-size:29px;font-weight:800;margin:10px 0 2px;">恭喜__NAME__！__VERB__ <span style="color:#7CE0AA">__GOAL__ kg</span></div>
+ <div style="font-size:15px;color:#D7E5DC;line-height:1.75;margin-top:8px;">__LINE__</div>
 </div>
 <div style="position:fixed;left:0;right:0;bottom:16px;text-align:center;color:rgba(255,255,255,.4);font-size:12px;">点 ✕ / 空白处 / 按 Esc 关闭，回到看板</div>
 </div>
 <style>
 .cbcard{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%) scale(.85);opacity:0;text-align:center;color:#fff;
- background:rgba(40,29,20,.55);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);
+ background:rgba(22,33,26,.5);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.16);
  border-radius:26px;padding:34px 40px;box-shadow:0 24px 70px rgba(0,0,0,.45);max-width:88vw;
  animation:cbpop .7s cubic-bezier(.2,.9,.2,1.1) .2s forwards;}
 @keyframes cbpop{to{transform:translate(-50%,-50%) scale(1);opacity:1;}}
@@ -831,18 +831,18 @@ TEMPLATE = r"""<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
 <script src="./assets/chart.umd.min.js"></script>
 <style>
 :root{
- /* 色板 · 暖陪跑风(Nature Distilled,见 docs/DESIGN-SYSTEM.md) */
- --bg:#F5F0E1;--card:#FFFCF5;--ink:#3D2E22;--t2:#6E5C4B;--t3:#8A7866;--line:#EDE3D0;
- --accent:#C67B5C;--accent-d:#B5651D;--soft:#F3E8D8;--warn:#B5651D;
- --pos:#6B7B3C;--pos-d:#57652C;--pos-soft:#EDF0DC;          /* 正向反馈:掉秤/达标/训练日 */
- --sand:#D4C4A8;--praise:#FAE8D4;
- --shadow:0 2px 12px rgba(91,64,38,.08);
+ /* 色板 · 清新草绿终版(近白底大留白,绿只做正反馈点缀,见 docs/DESIGN-SYSTEM.md) */
+ --bg:#FAFCFA;--card:#FFFFFF;--ink:#28382E;--t2:#5C7265;--t3:#74877B;--line:#EAF2EC;
+ --accent:#16A34A;--accent-d:#15803D;--accent-l:#22C55E;--soft:#E7F5EC;--warn:#B5651D;
+ --pos:#15803D;--pos-d:#15803D;--pos-soft:#E3F3E9;          /* 正向反馈:掉秤/达标/训练日 */
+ --weak:#D7EDDE;--line2:#0D9488;--praise:#F1FAF4;
+ --shadow:0 2px 12px rgba(70,60,45,.08);
  /* 状态色:日历格子 & 活动 chip —— 全部集中一处,杜绝撞色 */
- --cell:#FBF6EA;--cell-today:#FFFCF5;
+ --cell:#F7FAF7;--cell-today:#FFFFFF;
  --chip-train:var(--pos-soft);--chip-train-t:var(--pos-d);
- --chip-cardio:#F3EBDF;--chip-cardio-t:#9A6E3C;
- --chip-rest:#F1EADB;--chip-rest-t:var(--t3);
- --chip-other:#EFE8D8;--chip-other-t:var(--t2);
+ --chip-cardio:#DFF1EE;--chip-cardio-t:#0B7468;
+ --chip-rest:#EFF3EF;--chip-rest-t:var(--t3);
+ --chip-other:#ECF1EC;--chip-other-t:var(--t2);
  /* 间距刻度 / 圆角(组件统一引用) */
  --s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;
  --r:16px;--r-sm:12px;
@@ -865,23 +865,23 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .head h1{font-size:23px;font-weight:700;letter-spacing:-.01em;margin:0;}
 .head .answer{font-size:24px;font-weight:700;color:var(--accent);margin-top:2px;letter-spacing:-.01em;}
 .msbar{position:relative;margin:56px 24px 4px;}
-.track2{position:relative;height:8px;background:var(--sand);border-radius:8px;}
-.fill2{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent-d));border-radius:8px;}
-.here{position:absolute;top:4px;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 1px 4px rgba(91,64,38,.25);transform:translate(-50%,-50%);z-index:4;}
+.track2{position:relative;height:8px;background:var(--weak);border-radius:8px;}
+.fill2{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent-l),var(--accent-d));border-radius:8px;}
+.here{position:absolute;top:4px;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 1px 4px rgba(40,56,46,.22);transform:translate(-50%,-50%);z-index:4;}
 .here b{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--accent-d);white-space:nowrap;}
 .node{position:absolute;top:4px;z-index:2;}
-.node .pole{position:absolute;left:0;top:-22px;width:2px;height:22px;background:var(--sand);transform:translateX(-50%);border-radius:2px;}
+.node .pole{position:absolute;left:0;top:-22px;width:2px;height:22px;background:var(--weak);transform:translateX(-50%);border-radius:2px;}
 .node .flag{position:absolute;left:0;top:-45px;transform:translateX(-50%);min-width:34px;height:25px;padding:0 9px;
- display:flex;align-items:baseline;justify-content:center;gap:1px;border-radius:8px;background:#fff;border:1.5px solid var(--sand);
- color:var(--t2);font-size:14px;font-weight:700;box-shadow:0 2px 5px rgba(91,64,38,.10);}
+ display:flex;align-items:baseline;justify-content:center;gap:1px;border-radius:8px;background:#fff;border:1.5px solid var(--weak);
+ color:var(--t2);font-size:14px;font-weight:700;box-shadow:0 2px 5px rgba(40,56,46,.08);}
 .node .flag i{font-style:normal;font-size:9px;font-weight:600;color:var(--t3);}
 .node .nl{position:absolute;top:24px;left:0;transform:translateX(-50%);font-size:10.5px;color:var(--t3);white-space:nowrap;}
-.node.done .flag{background:var(--pos);border-color:var(--pos);color:#fff;} .node.done .flag i{color:#E4E9D2;}
+.node.done .flag{background:var(--pos);border-color:var(--pos);color:#fff;} .node.done .flag i{color:#D3E8DA;}
 .node.done .pole{background:var(--pos);} .node.done .nl{color:var(--pos-d);}
-.node.now .flag{border-color:var(--accent-d);border-width:2px;color:var(--accent-d);box-shadow:0 0 0 4px var(--soft),0 2px 5px rgba(91,64,38,.10);}
-.node.now .flag i{color:var(--accent-d);} .node.now .pole{background:var(--accent-d);} .node.now .nl{color:var(--accent-d);font-weight:700;}
-.node.start .flag{background:#F1EADB;border-color:var(--sand);color:var(--t2);} .node.start .flag i{color:var(--t3);}
-.node.start .pole{background:var(--sand);} .node.start .nl{color:var(--t3);}
+.node.now .flag{border-color:var(--accent);border-width:2px;color:var(--accent-d);box-shadow:0 0 0 4px var(--soft),0 2px 5px rgba(40,56,46,.08);}
+.node.now .flag i{color:var(--accent-d);} .node.now .pole{background:var(--accent);} .node.now .nl{color:var(--accent-d);font-weight:700;}
+.node.start .flag{background:#F2F6F2;border-color:var(--weak);color:var(--t2);} .node.start .flag i{color:var(--t3);}
+.node.start .pole{background:var(--weak);} .node.start .nl{color:var(--t3);}
 /* 首尾节点贴边对齐，避免旗子/文字飘到卡片外 */
 .node.start .flag,.node.start .nl{transform:translateX(0);left:-2px;}
 .node.end .flag,.node.end .nl{transform:translateX(-100%);left:2px;}
@@ -927,10 +927,10 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .diet-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center;}
 @media(max-width:600px){.diet-grid{grid-template-columns:1fr;gap:16px;}}
 .diary{display:flex;flex-direction:column;gap:10px;}
-.meal{display:flex;gap:11px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:13px;background:#FDF9F0;}
+.meal{display:flex;gap:11px;align-items:flex-start;padding:12px;border:1px solid var(--line);border-radius:13px;background:#FBFDFB;}
 .mvis{flex:none;}
 .mtile{width:50px;height:50px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:25px;
- background:linear-gradient(135deg,#F8EFE0,#F3E7D4);border:1px solid #EBDFC9;}
+ background:linear-gradient(135deg,#F2F8F3,#EAF4EC);border:1px solid #E2EEE5;}
 .mthumb{width:54px;height:54px;border-radius:13px;object-fit:cover;border:1px solid var(--line);
  filter:saturate(1.05) contrast(1.02);display:block;}
 .mbody{min-width:0;flex:1;}
@@ -939,14 +939,14 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .mfi{font-size:14px;font-weight:600;}
 .sep{color:var(--t3);opacity:.55;margin:0 7px;font-weight:400;}
 .mnut{font-size:11px;color:var(--t3);margin-top:5px;}
-.meal.empty{background:#FBF6EA;} .meal.empty .mtile{opacity:.5;} .meal.empty .mbody{opacity:.6;}
+.meal.empty{background:#F7FAF7;} .meal.empty .mtile{opacity:.5;} .meal.empty .mbody{opacity:.6;}
 .mf-empty{font-size:14px;color:var(--t3);}
 .praise-card{background:var(--praise);border:1.5px solid var(--accent);position:relative;overflow:hidden;}
 .praise-card .pz-deco{position:absolute;right:8px;top:-6px;font-size:50px;opacity:.22;transform:rotate(8deg);pointer-events:none;}
 .pz-h{position:relative;font-size:11.5px;font-weight:800;letter-spacing:.1em;color:var(--accent-d);}
-.pz-big{position:relative;font-size:17px;line-height:1.62;font-weight:650;color:#6E4226;margin-top:10px;}
+.pz-big{position:relative;font-size:17px;line-height:1.62;font-weight:650;color:#2C4A36;margin-top:10px;}
 /* 三大营养素达标 */
-.macro{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:#FDF9F0;}
+.macro{margin-top:16px;border:1px solid var(--line);border-radius:12px;padding:13px 15px;background:#FBFDFB;}
 .mttl{font-size:11px;color:var(--t3);letter-spacing:.06em;margin-bottom:9px;}
 .mr{display:grid;grid-template-columns:48px 1fr auto;align-items:baseline;gap:10px;padding:5px 0;}
 .mk{color:var(--t2);font-size:13px;}
@@ -955,12 +955,12 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .ms.ok{color:var(--pos);} .ms.low{color:var(--t3);} .ms.warn{color:var(--warn);}
 .verdict{margin-top:13px;font-size:14.5px;line-height:1.65;color:var(--ink);}
 .advice{margin-top:10px;font-size:13px;line-height:1.6;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
-.note{padding:14px;background:#FBF6EA;border:1px dashed var(--sand);border-radius:12px;font-size:12.5px;color:var(--t3);line-height:1.7;}
+.note{padding:14px;background:#F7FAF7;border:1px dashed var(--weak);border-radius:12px;font-size:12.5px;color:var(--t3);line-height:1.7;}
 .body-t{font-size:14.5px;line-height:1.7;color:var(--t2);}
-.coach{margin-top:14px;background:#F7F0E3;border:1px solid #ECE0CA;border-radius:12px;padding:11px 14px;font-size:13.5px;line-height:1.72;color:var(--t2);}
-.coach-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--accent-d);background:#F2E3CE;padding:2px 8px;border-radius:6px;margin-right:8px;letter-spacing:.05em;}
+.coach{margin-top:14px;background:#F6FAF7;border:1px solid #E4EFE7;border-radius:12px;padding:11px 14px;font-size:13.5px;line-height:1.72;color:var(--t2);}
+.coach-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--accent-d);background:var(--pos-soft);padding:2px 8px;border-radius:6px;margin-right:8px;letter-spacing:.05em;}
 /* 饮食 · 截至目前(横向铺平) */
-.diet-right{padding:14px 16px;background:#FDF9F0;border:1px solid var(--line);border-radius:13px;}
+.diet-right{padding:14px 16px;background:#FBFDFB;border:1px solid var(--line);border-radius:13px;}
 .sf-h{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.13em;text-transform:uppercase;margin:0 0 12px;}
 .sf-strip{display:flex;flex-direction:column;gap:11px;}
 .sf-item{display:flex;align-items:baseline;gap:5px;}
@@ -997,16 +997,16 @@ function fd(m){return new Date(m).toISOString().slice(5,10);}
 // 悬浮提示标题统一显示成"月-日"(否则会弹出原始时间戳那串大数字)
 Chart.defaults.plugins.tooltip.callbacks=Chart.defaults.plugins.tooltip.callbacks||{};
 Chart.defaults.plugins.tooltip.callbacks.title=function(its){return (its&&its.length)?fd(its[0].parsed.x):'';};
-const GRID='#EBE2CE',TICK='#8A7866';
+const GRID='#EAF2EC',TICK='#74877B';
 const AX={type:'linear',ticks:{color:TICK,maxTicksLimit:6,font:{size:10},callback:v=>fd(v)},grid:{color:GRID,drawTicks:false},border:{display:false}};
 function yax(o){return Object.assign({ticks:{color:TICK,font:{size:10}},grid:{color:GRID,drawTicks:false},border:{display:false}},o||{});}
 const LEG={labels:{color:TICK,boxWidth:10,boxHeight:10,font:{size:10},usePointStyle:true,pointStyle:'circle'}};
 let wc;
 function drawWeight(lo,hi){
   const cfg={data:{datasets:[
-    {type:'line',label:'目标',data:[{x:D.minx,y:D.target},{x:D.maxx,y:D.target}],borderColor:'#CBB89A',borderDash:[5,5],borderWidth:1,pointRadius:0},
-    {type:'scatter',label:'每日',data:D.weightDaily,pointRadius:2.2,pointBackgroundColor:'#D4C4A8',borderColor:'#D4C4A8'},
-    {type:'line',label:'7 日均',data:D.ma7,borderColor:'#C67B5C',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(198,123,92,0.12)'},
+    {type:'line',label:'目标',data:[{x:D.minx,y:D.target},{x:D.maxx,y:D.target}],borderColor:'#C2DCC9',borderDash:[5,5],borderWidth:1,pointRadius:0},
+    {type:'scatter',label:'每日',data:D.weightDaily,pointRadius:2.2,pointBackgroundColor:'#D7EDDE',borderColor:'#C2DCC9'},
+    {type:'line',label:'7 日均',data:D.ma7,borderColor:'#16A34A',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(22,163,74,0.07)'},
   ]},options:{maintainAspectRatio:false,plugins:{legend:Object.assign({},LEG,{labels:Object.assign({},LEG.labels,{filter:i=>i.text!=='目标'})})},
     scales:{x:Object.assign({},AX,{min:lo,max:hi}),y:yax({})}}};
   if(wc)wc.destroy(); wc=new Chart(document.getElementById('cWeight'),cfg);
@@ -1020,18 +1020,18 @@ ranges.forEach(([t,lo],i)=>{const b=document.createElement('button');b.textConte
   b.onclick=()=>{[...rd.children].forEach(c=>c.classList.remove('on'));b.classList.add('on');drawWeight(lo,D.maxx);};rd.appendChild(b);});
 if(D.showDietChart && D.kcalDaily.length){
   new Chart(document.getElementById('cKcal'),{data:{datasets:[
-    {type:'bar',label:'每日热量',data:D.kcalDaily,backgroundColor:'#EAD9C0',borderRadius:4},
-    D.kcalAvg?{type:'line',label:'均值',data:[{x:D.kcalDaily[0].x,y:D.kcalAvg},{x:D.kcalDaily[D.kcalDaily.length-1].x,y:D.kcalAvg}],borderColor:'#C67B5C',borderWidth:1.5,pointRadius:0}:null
+    {type:'bar',label:'每日热量',data:D.kcalDaily,backgroundColor:'#D7EDDE',borderRadius:4},
+    D.kcalAvg?{type:'line',label:'均值',data:[{x:D.kcalDaily[0].x,y:D.kcalAvg},{x:D.kcalDaily[D.kcalDaily.length-1].x,y:D.kcalAvg}],borderColor:'#16A34A',borderWidth:1.5,pointRadius:0}:null
   ].filter(Boolean)},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,y:yax({})}}});
   new Chart(document.getElementById('cMacro'),{data:{datasets:[
-    {type:'line',label:'蛋白 g',data:D.proteinDaily,borderColor:'#6B7B3C',borderWidth:2,pointRadius:2,tension:.3},
-    {type:'line',label:'脂肪 g',data:D.fatDaily,borderColor:'#B5651D',borderWidth:2,pointRadius:2,tension:.3,borderDash:[6,4]},
+    {type:'line',label:'蛋白 g',data:D.proteinDaily,borderColor:'#16A34A',borderWidth:2,pointRadius:2,tension:.3},
+    {type:'line',label:'脂肪 g',data:D.fatDaily,borderColor:'#0D9488',borderWidth:2,pointRadius:2,tension:.3,borderDash:[6,4]},
   ]},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,y:yax({})}}});
 }
 if(D.showBody && D.fat.length){
   new Chart(document.getElementById('cBody'),{data:{datasets:[
-    {type:'line',label:'瘦体重 kg',data:D.lean,borderColor:'#6B7B3C',borderWidth:2.5,pointRadius:0,yAxisID:'y',borderDash:[6,4],tension:.3},
-    {type:'line',label:'脂肪量 kg',data:D.fat,borderColor:'#B5651D',borderWidth:2.5,pointRadius:1.6,pointBackgroundColor:'#B5651D',yAxisID:'y1',tension:.3},
+    {type:'line',label:'瘦体重 kg',data:D.lean,borderColor:'#0D9488',borderWidth:2.5,pointRadius:0,yAxisID:'y',borderDash:[6,4],tension:.3},
+    {type:'line',label:'脂肪量 kg',data:D.fat,borderColor:'#15803D',borderWidth:2.5,pointRadius:1.6,pointBackgroundColor:'#15803D',yAxisID:'y1',tension:.3},
   ]},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,
     y:yax({position:'left',grace:'12%'}),
     y1:yax({position:'right',grace:'12%',grid:{drawOnChartArea:false}})}}});
