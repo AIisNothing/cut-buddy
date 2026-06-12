@@ -899,8 +899,9 @@ h1,.stat .v,.head .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 @media(min-width:880px){
  .wrap{max-width:1000px;}
  .span2 .stats{gap:48px;}
- .row2{display:flex;gap:14px;align-items:flex-start;}
- .row2>.col{flex:1;min-width:0;}
+ .row2{display:flex;gap:14px;align-items:stretch;}
+ .row2>.col{flex:1;min-width:0;display:flex;flex-direction:column;}
+ .row2>.col>.card:last-child{flex:1;}  /* 各列末卡吃掉剩余高度→两列底边对齐 */
 }
 .mt{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.13em;text-transform:uppercase;margin:0 0 16px;}
 /* 今日状态 */
