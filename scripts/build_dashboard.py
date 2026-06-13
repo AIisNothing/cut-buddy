@@ -839,13 +839,13 @@ def render(D):
                  "<div class='row'><span class='k'>是否调整</span><span>%s</span></div></div>") % (
                  esc(tr["chg"]), esc(tr_cause), esc(tr["adj"]))
     c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight' role='img' aria-label='体重趋势:单日散点(弱化)与7日均线(主线)'></canvas></div>%s%s" % (
-        weight_kv, c_coach(tr["coach"])), "体重趋势")
+        weight_kv, c_coach(tr["coach"])), "体重趋势", cls="chartgrow")
     c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div><div class='dyn%s'>%s</div>%s%s" % (
         d_left, d_right, trim2, c_coach(d_coach), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱")
     c_calendar = c_card("<div class='body-t' style='margin-bottom:12px'>%s</div>%s%s" % (
         esc(ca["today_line"]), cal_html(ca), c_coach(ca["expl"])), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="grow")
     c_bodycomp = c_card("<div class='body-t'>%s</div>%s%s" % (
-        esc(bo["summary"]), body_chart, c_coach(bo["coach"])), "身体成分", cls="")
+        esc(bo["summary"]), body_chart, c_coach(bo["coach"])), "身体成分", cls="chartgrow")
     # 右下角位:周日=本周小结(每周复盘一次),平时=随机夸夸/小课堂
     if D.get("is_sunday"):
         c_supp = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结 · 周日复盘")
@@ -1000,7 +1000,7 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .b3{display:grid;grid-template-columns:34fr 36fr 30fr;gap:0 14px;align-items:stretch;}
  .bcell{display:flex;flex-direction:column;min-width:0;}
  .bcell>.card:last-child{flex:1;}
- /* 指定 .grow 的卡优先吃剩余高度(日历格子随之长高=正经留白),同格末卡则不再拉伸 */
+ /* .grow 卡(日历)吃掉该列富余高度,表格行随之等比撑开填满——保证三列底边对齐,且无中间白洞 */
  .bcell>.card.grow{flex:1;display:flex;flex-direction:column;}
  .bcell>.card.grow table.cal{flex:1;}
  .bcell:has(>.card.grow)>.card:last-child:not(.grow){flex:0 0 auto;}
@@ -1023,11 +1023,13 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .one{font-size:14px;}
  .stats{margin-bottom:10px;gap:24px;}
  .msbar{margin:50px 20px 2px;}
- /* kv 三行并一行(分享视图寸土寸金) */
- .kv{margin-top:8px;display:flex;flex-wrap:wrap;gap:3px 22px;}
- .kv .row{padding:2px 0;font-size:13px;border-top:none;}
+ .kv{margin-top:8px;} .kv .row{padding:5px 0;font-size:13px;}  /* 三行上下排,标签恒对齐 */
  .range{margin-bottom:4px;}
  .cv.sm{height:92px;}
+ /* 同列多图均衡伸缩:带 chartgrow 的卡平分该格富余高度,各自图表随卡长高(谁也不独吞留白) */
+ .bcell>.card.chartgrow{display:flex;flex-direction:column;flex:1 1 auto;}
+ .card.chartgrow .cv{flex:1 1 auto;height:auto;min-height:92px;}
+ .card.chartgrow .cv:not(.sm){min-height:205px;}
  .body-t{font-size:13.5px;line-height:1.55;}
  .tip-t{font-size:14px;margin-bottom:3px;} .tip-b{font-size:13.5px;line-height:1.55;}
  .pz-big{font-size:15.5px;line-height:1.5;margin-top:6px;}
@@ -1040,7 +1042,7 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .macro{margin-top:8px;padding:7px 10px;} .mr{padding:2px 0;} .mv{font-size:14px;}
  .diet-right{padding:10px 13px;} .sf-strip{gap:7px;} .sf-item b{font-size:16px;}
  table.cal{border-spacing:2px;} table.cal td{height:31px;padding:2px 3px;border-radius:6px;}
- .dn{font-size:9px;} .chip{font-size:8.5px;padding:0 3px;margin-top:1px;}
+ .dn{font-size:9px;} .chip{font-size:8.5px;padding:1px 4px;margin-top:2px;line-height:1.5;}  /* 活动块之间一点点呼吸感 */
  .note{padding:7px 10px;font-size:11px;line-height:1.5;}
  .foot{margin-top:8px;}
 }
