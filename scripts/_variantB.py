@@ -283,8 +283,7 @@ def build_all():
             "today": {"weight": latest_w, "ma7": ma_now, "trend_label": trend_label, "one": one, "speed": speed},
             "trend": {"chg": chg_line, "cause": cause_line, "adj": adj_line, "coach": coach_w},
             "ms": mstone, "diet": diet, "calendar": cal, "body": body,
-            "supp": supp, "recap": recap, "is_sunday": L.isoweekday() == 7,
-            "charts": charts, "celebrate": celebrate}
+            "supp": supp, "recap": recap, "charts": charts, "celebrate": celebrate}
 
 def build_diet(profile, mbd, wbd, L, latest_w):
     todays = mbd.get(L.isoformat(), [])
@@ -813,52 +812,42 @@ def render(D):
     foot = "掉秤搭子 cut-buddy · 一笔一笔记出来的"   # 落款不带本地路径,截图分享出去也干净
     show_trend, show_pattern = di["show_trend"], di["show_pattern"]
 
-    # 饮食卡弹性内容预算:加餐多时,宽屏"一页"视图按优先级让位(只 CSS 隐藏,手机滚动视图仍保留全部)
-    # ≥4 张餐卡 → 撤"最近7天/30天"点评;≥5 张 → 连松松点评也撤
-    extra_meals = max(0, (len(di["cards"]) if di.get("has_today") else 0) - 3)
-    trim1 = " trim-wide" if extra_meals >= 1 else ""
-    trim2 = " trim-wide" if extra_meals >= 2 else ""
-    # 饮食长期趋势:只留文字点评不画图(7天均值+30天模式,数据不足自动隐藏)
-    trend_block = ("<div class='dyn%s'>%s<div class='body-t'>%s</div></div>" % (
-        trim1, c_sub("最近 7 天"), esc(di["week_text"]))) if show_trend else ""
-    pattern_block = ("<div class='dyn%s'>%s<div class='body-t'>%s</div></div>" % (
-        trim1, c_sub("最近 30 天"), esc(di["pattern_text"]))) if show_pattern else ""
+    # 数据不足时整段隐藏(数据够了自动回来);独立成卡放"趋势"栏,与今日饮食卡分开
+    trend_block = ("<div class='body-t'>%s</div><div class='cv sm'><canvas id='cKcal' role='img' aria-label='最近7天每日热量柱状图与均值线'></canvas></div><div class='cv sm'><canvas id='cMacro' role='img' aria-label='最近7天蛋白与脂肪摄入折线图'></canvas></div>" % esc(di["week_text"])) if show_trend else ""
+    pattern_block = (c_sub("最近 30 天") + "<div class='body-t'>%s</div>" % esc(di["pattern_text"])) if show_pattern else ""
     body_chart = "<div class='cv sm'><canvas id='cBody' role='img' aria-label='身体成分趋势:瘦体重(虚线)与脂肪量(实线)双轴折线图'></canvas></div>" if bo["has"] else ""
 
     # —— 用统一组件拼装整页(Bento 层级:英雄卡=第一眼焦点) ——
-    # 里程碑卡:进度条 + 速度点评一句(msnote 给旗标下方的标签留空隙,防文字压标签)
-    c_milestone = c_card(milestone_html(mst) + "<div class='speed msnote'>%s</div>" % esc(t["speed"]),
-                         "里程碑 · 三个目标")
+    c_milestone = c_card(milestone_html(mst), "里程碑 · 三个目标")
     stats = (c_stat("今日体重", f1(t["weight"]), "kg") + c_stat("7 日均重", f1(t["ma7"]), "kg", "ma")
              + "<div class='stat tr'><div class='l'>趋势</div>%s</div>" % c_tag(t["trend_label"]))
     c_hero = ("<div class='card hero'><div class='upd'>更新至 %s</div><h1>%s</h1><div class='answer'>%s</div>"
-              "<div class='stats'>%s</div><div class='one'>%s</div></div>") % (
-        esc(D["updated"]), esc(mst["question"]), esc(mst["answer"]), stats, esc(t["one"]))
+              "<div class='stats'>%s</div><div class='one'>%s</div><div class='speed'>%s</div></div>") % (
+        esc(D["updated"]), esc(mst["question"]), esc(mst["answer"]), stats, esc(t["one"]), esc(t["speed"]))
     weight_kv = ("<div class='kv'><div class='row'><span class='k'>今日变化</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>可能原因</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>是否调整</span><span>%s</span></div></div>") % (
                  esc(tr["chg"]), esc(tr_cause), esc(tr["adj"]))
     c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight' role='img' aria-label='体重趋势:单日散点(弱化)与7日均线(主线)'></canvas></div>%s%s" % (
         weight_kv, c_coach(tr["coach"])), "体重趋势")
-    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div><div class='dyn%s'>%s</div>%s%s" % (
-        d_left, d_right, trim2, c_coach(d_coach), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱")
+    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s" % (
+        d_left, d_right, c_coach(d_coach), pattern_block), "饮食 · 今日吃饭小日记 🍱")
+    c_diettrend = c_card(trend_block, "饮食趋势 · 最近 7 天") if trend_block else ""
     c_calendar = c_card("<div class='body-t' style='margin-bottom:12px'>%s</div>%s%s" % (
-        esc(ca["today_line"]), cal_html(ca), c_coach(ca["expl"])), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="grow")
+        esc(ca["today_line"]), cal_html(ca), c_coach(ca["expl"])), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="")
     c_bodycomp = c_card("<div class='body-t'>%s</div>%s%s" % (
         esc(bo["summary"]), body_chart, c_coach(bo["coach"])), "身体成分", cls="")
-    # 右下角位:周日=本周小结(每周复盘一次),平时=随机夸夸/小课堂
-    if D.get("is_sunday"):
-        c_supp = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结 · 周日复盘")
-    else:
-        c_supp = c_card(supp_html(supp), cls=("praise-card" if supp["kind"] == "praise" else ""))
-    # Bento 两段式·全量一页(≥1360px 一屏透底,窄屏退化单列):
-    #  R1 第一眼:英雄卡 | 里程碑(含速度点评)
-    #  R2 三栏:[体重趋势+身体成分] [饮食(含长期趋势点评)] [日历+夸夸/周日小结]
+    c_supp = c_card(supp_html(supp), cls=("praise-card" if supp["kind"] == "praise" else ""))
+    c_recap = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结", cls="")
+    # B 版:头版精选一屏(英雄|里程碑 → 趋势+夸夸 | 饮食 | 日历+小结)+ 分割线 + 第二页(身体成分|7天趋势)
     band1 = "<div class='b1'>%s%s</div>" % (c_hero, c_milestone)
     band2 = ("<div class='b3'>"
              "<div class='bcell'>%s%s</div><div class='bcell narrowdiet'>%s</div><div class='bcell'>%s%s</div></div>"
-             % (c_weight, c_bodycomp, c_diet, c_calendar, c_supp))
-    body_html = band1 + band2
+             % (c_weight, c_supp, c_diet, c_calendar, c_recap))
+    page2 = ("<div class='pgcut'><span>—— 以下是更细的数据,日常自己看,截图可以不带 ——</span></div>"
+             "<div class='b2'><div class='bcell'>%s</div><div class='bcell'>%s</div></div>"
+             % (c_bodycomp, c_diettrend or ""))
+    body_html = band1 + band2 + page2
 
     out = TEMPLATE.replace("/*DATA*/", json.dumps(D["charts"], ensure_ascii=False)).replace("__BODY__", body_html)
     out = out.replace("数据本地存储 · ~/Documents/cut-buddy-data", foot)
@@ -982,13 +971,11 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .tip-t{font-size:15px;font-weight:650;color:var(--ink);margin-bottom:5px;}
 .tip-b{font-size:14.5px;line-height:1.7;color:var(--t2);}  /* 与 .body-t 同刻度:同级卡片正文必须同字号 */
 .speed{margin-top:11px;font-size:13.5px;line-height:1.65;color:var(--t2);padding-left:12px;border-left:2px solid var(--soft);}
-/* 里程碑进度条下的点评:给旗标下方标签让出空间;在大卡里属主要内容,字号用正文级(双类压过紧凑块覆写) */
-.speed.msnote{margin-top:38px;font-size:14.5px;line-height:1.7;}
 /* 字号刻度约定:正文级(body-t/tip-b/judge2)14.5 · 结论行(one)15 · 次级说明(coach/advice2/speed)13.5 · 提示(note)12.5 */
 /* Bento 三段式(分享视图):默认(窄屏)容器透明化、卡片单列竖排;≥1360px 进入便当盒布局——
    R1 英雄卡|里程碑 → R2 趋势大图|夸夸+身体成分 → R3 饮食|7天趋势|日历+小结。
    各格末卡弹性补高 → 每段底边恒对齐,整页截图即一张层级清晰的分享宽图。 */
-.b1,.b2,.b3,.bcell{display:contents;}
+.b1,.b2,.b3,.b4,.bcell{display:contents;}
 @media(min-width:880px){
  .wrap{max-width:1000px;}
  .span2 .stats{gap:48px;}
@@ -997,14 +984,10 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .wrap{max-width:1680px;padding-left:28px;padding-right:28px;}
  .b1{display:grid;grid-template-columns:4fr 8fr;gap:0 14px;align-items:stretch;}
  .b2{display:grid;grid-template-columns:6fr 6fr;gap:0 14px;align-items:stretch;}
- .b3{display:grid;grid-template-columns:34fr 36fr 30fr;gap:0 14px;align-items:stretch;}
+ .b3{display:grid;grid-template-columns:38fr 33fr 29fr;gap:0 14px;align-items:stretch;}
+ .b4{display:grid;grid-template-columns:31fr 25fr 22fr 22fr;gap:0 14px;align-items:stretch;}
  .bcell{display:flex;flex-direction:column;min-width:0;}
  .bcell>.card:last-child{flex:1;}
- /* 指定 .grow 的卡优先吃剩余高度(日历格子随之长高=正经留白),同格末卡则不再拉伸 */
- .bcell>.card.grow{flex:1;display:flex;flex-direction:column;}
- .bcell>.card.grow table.cal{flex:1;}
- .bcell:has(>.card.grow)>.card:last-child:not(.grow){flex:0 0 auto;}
- .trim-wide{display:none;}  /* 饮食卡弹性预算:一页视图下让位的低优先内容(手机滚动视图不受影响) */
  .b1>.card{display:flex;flex-direction:column;justify-content:center;}
  .b1>.hero{justify-content:flex-start;}
  .hero h1{font-size:21px;}
@@ -1042,7 +1025,9 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  table.cal{border-spacing:2px;} table.cal td{height:31px;padding:2px 3px;border-radius:6px;}
  .dn{font-size:9px;} .chip{font-size:8.5px;padding:0 3px;margin-top:1px;}
  .note{padding:7px 10px;font-size:11px;line-height:1.5;}
- .foot{margin-top:8px;}
+ .pgcut{display:flex;align-items:center;gap:14px;margin:4px 0 12px;color:var(--t3);font-size:11px;letter-spacing:.06em;}
+.pgcut:before,.pgcut:after{content:'';flex:1;height:1px;background:var(--weak);}
+.foot{margin-top:8px;}
 }
 .mt{font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.13em;text-transform:uppercase;margin:0 0 16px;}
 /* 今日状态 */
@@ -1159,7 +1144,16 @@ drawWeight(ranges[0][1],D.maxx);
 const rd=document.getElementById('range');
 ranges.forEach(([t,lo],i)=>{const b=document.createElement('button');b.textContent=t;if(i===0)b.classList.add('on');
   b.onclick=()=>{[...rd.children].forEach(c=>c.classList.remove('on'));b.classList.add('on');drawWeight(lo,D.maxx);};rd.appendChild(b);});
-// 饮食长期趋势已改为文字点评(v2.1),不再画 7 天小图
+if(D.showDietChart && D.kcalDaily.length){
+  new Chart(document.getElementById('cKcal'),{data:{datasets:[
+    {type:'bar',label:'每日热量',data:D.kcalDaily,backgroundColor:'#D7EDDE',borderRadius:4},
+    D.kcalAvg?{type:'line',label:'均值',data:[{x:D.kcalDaily[0].x,y:D.kcalAvg},{x:D.kcalDaily[D.kcalDaily.length-1].x,y:D.kcalAvg}],borderColor:'#16A34A',borderWidth:1.5,pointRadius:0}:null
+  ].filter(Boolean)},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,y:yax({})}}});
+  new Chart(document.getElementById('cMacro'),{data:{datasets:[
+    {type:'line',label:'蛋白 g',data:D.proteinDaily,borderColor:'#16A34A',borderWidth:2,pointRadius:2,tension:.3},
+    {type:'line',label:'脂肪 g',data:D.fatDaily,borderColor:'#0D9488',borderWidth:2,pointRadius:2,tension:.3,borderDash:[6,4]},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,y:yax({})}}});
+}
 if(D.showBody && D.fat.length){
   new Chart(document.getElementById('cBody'),{data:{datasets:[
     {type:'line',label:'瘦体重 kg',data:D.lean,borderColor:'#0D9488',borderWidth:2.5,pointRadius:0,yAxisID:'y',borderDash:[6,4],tension:.3},
@@ -1177,7 +1171,7 @@ function cbFit(){
   document.body.style.zoom=(z<1)?z:'';
 }
 addEventListener('resize',function(){clearTimeout(window.__cbft);window.__cbft=setTimeout(cbFit,120);});
-cbFit();
+/* B 版不自动缩放:头版本身一屏,细节在线下面,翻页看 */
 </script>
 __CELEBRATE__
 </body></html>"""
