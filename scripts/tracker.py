@@ -34,7 +34,7 @@ def pdate(s):
 SCHEMA = {
     "weight.csv":  ["date", "weight_kg", "body_fat_pct", "lean_mass_kg", "note"],
     "days.csv":    ["date", "sleep_h", "period", "bloat", "bowel", "high_salt", "note"],
-    "meals.csv":   ["date", "meal", "food", "grams", "kcal", "protein", "fat", "carb", "veg_g", "fructose_g", "source", "note"],
+    "meals.csv":   ["date", "meal", "food", "dish", "grams", "kcal", "protein", "fat", "carb", "veg_g", "fructose_g", "source", "note"],
     "workouts.csv":["date", "type", "duration_min", "intensity", "is_strength", "is_cardio", "is_ball", "is_rest", "cardio_min", "load", "performance", "fatigue", "energy_kcal", "distance_km", "raw_type", "note"],
     "foods.csv":   ["name", "brand", "per100_kcal", "per100_protein", "per100_fat", "per100_carb", "per100_fructose", "unit_g", "source", "added"],
 }
@@ -218,6 +218,7 @@ def cmd_log(payload):
             msg.append("⚠️未能计算[%s](缺营养表/不在食物库)" % it.get("food", "?")); continue
         grams, kcal, pro, fat, carb, fru, source, save = r
         append_csv("meals.csv", {"date": date, "meal": it.get("meal", ""), "food": it.get("food", ""),
+                   "dish": it.get("dish", ""),  # 显示用菜名(混合菜原料共用一个 dish,看板折叠成一行)
                    "grams": grams, "kcal": kcal, "protein": pro, "fat": fat, "carb": carb,
                    "veg_g": grams if it.get("veg") else "", "fructose_g": fru,
                    "source": source, "note": it.get("note", "")})
