@@ -129,8 +129,10 @@ def resolve_item(item, foodlib):
     if per100:  # 优先营养表
         kcal100 = per100.get("kcal")
         if kcal100 is None and "kj" in per100: kcal100 = kj_to_kcal(per100["kj"])
-        p100 = {"kcal": kcal100 or 0, "protein": per100.get("protein", 0),
-                "fat": per100.get("fat", 0), "carb": per100.get("carb", 0),
+        pr100, ft100, cb100 = per100.get("protein", 0), per100.get("fat", 0), per100.get("carb", 0)
+        # 只给了碳蛋脂、没给 kcal/kj 时,按 碳×4+蛋×4+脂×9 反算(否则会把热量记成 0)
+        if kcal100 is None: kcal100 = cb100 * 4 + pr100 * 4 + ft100 * 9
+        p100 = {"kcal": kcal100, "protein": pr100, "fat": ft100, "carb": cb100,
                 "fructose": per100.get("fructose", 0)}
         source = item.get("source", "营养表")
         if name:  # 存入食物库供下次复用
