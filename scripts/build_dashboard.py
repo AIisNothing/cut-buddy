@@ -134,11 +134,24 @@ def days_by_date():
 LABEL = {"力量": "力量", "羽毛球": "羽毛球", "爬坡": "爬坡", "跳舞": "跳舞", "散步": "散步",
          "跑步": "跑步", "骑行": "骑行", "椭圆机": "椭圆", "游泳": "游泳", "核心": "核心",
          "HIIT": "HIIT", "混合有氧": "有氧", "瑜伽": "瑜伽", "休息": "休息", "铁三": "铁三"}
-def day_activities(wos):
+PARTS = ["肩", "腿", "胸", "背", "臀", "手臂", "臂", "核心", "腹", "全身"]
+def strength_part(note):
+    """从备注里提取力量训练的部位(练肩→肩),没有就返回空。"""
+    note = note or ""
+    found = []
+    for p in PARTS:
+        if p in note and not any(p in f for f in found): found.append(p)
+    return "/".join(found)
+def day_activities(wos, detail=False):
     labs = []
     for w in wos:
         if w.get("is_rest") == "1": labs.append("休息"); continue
-        labs.append(LABEL.get(w.get("type", ""), w.get("type", "其他")))
+        lab = LABEL.get(w.get("type", ""), w.get("type", "其他"))
+        # detail 模式下,力量带上部位(练腿→力量·腿),供日历显示;不影响其他逻辑
+        if detail and lab == "力量":
+            part = strength_part(w.get("note", ""))
+            if part: lab = "力量·" + part
+        labs.append(lab)
         if w.get("cardio_min") and str(w.get("cardio_min")).strip() not in ("", "0"): labs.append("爬坡")
     seen = []; [seen.append(x) for x in labs if x not in seen]
     return seen
@@ -392,6 +405,9 @@ def build_diet(profile, mbd, wbd, L, latest_w):
         else: nb.append("脂肪空间充足,正常做饭就行")
         nb.append("再配一份蔬菜")
         next_meal = "；".join(nb) + "。"
+        # 晚餐已记 = 今天三顿正餐吃完、没有"下一餐"了 → 不再前瞻提示(全天结论交给"目前整体")
+        if "晚餐" in bymeal:
+            next_meal = ""
 
     if todays and q:
         foods_today = [m["food"] for m in todays]
@@ -466,13 +482,12 @@ def build_calendar(L, wbd):
     cells = [None] * first_wd
     for d in range(1, ndays + 1):
         ds = datetime.date(y, m, d).isoformat()
-        cells.append({"day": d, "acts": day_activities(wbd.get(ds, [])), "today": (datetime.date(y, m, d) == L)})
+        cells.append({"day": d, "acts": day_activities(wbd.get(ds, []), detail=True), "today": (datetime.date(y, m, d) == L)})
     while len(cells) % 7: cells.append(None)
     weeks = [cells[i:i+7] for i in range(0, len(cells), 7)]
-    t_acts = day_activities(wbd.get(L.isoformat(), []))
+    t_acts = day_activities(wbd.get(L.isoformat(), []), detail=True)
     note = next((w["note"] for w in wbd.get(L.isoformat(), []) if w.get("note")), "")
-    today_line = ("今天已完成 · " + " + ".join(t_acts) + ("　" + note if note else "")) if t_acts \
-        else "今天还没记活动（休息、或忘开手表都行）"
+    today_line = ("今天已完成 · " + " + ".join(t_acts) + ("　" + note if note else "")) if t_acts else ""
     iso = L.isocalendar()[:2]; tdays = set(); strg = 0
     for ds, wos in wbd.items():
         if pdate(ds).isocalendar()[:2] == iso:
@@ -744,6 +759,7 @@ def cal_html(cal):
         rows += "<tr>%s</tr>" % tds
     return "<table class='cal'><thead><tr>%s</tr></thead><tbody>%s</tbody></table>" % (head, rows)
 def _chip(a):
+    a = a.split("·")[0]  # "力量·肩" → 按 "力量" 取色
     return {"力量": "a", "核心": "a", "羽毛球": "b", "爬坡": "b", "跑步": "b", "散步": "b", "跳舞": "b",
             "骑行": "b", "椭圆": "b", "游泳": "b", "有氧": "b", "休息": "r"}.get(a, "o")
 
@@ -782,7 +798,7 @@ def diet_html(di):  # 左侧:今日吃饭小日记(左图标 · 右食物列表)
                 vis, esc(c["meal"]), foods, nut)
     return out + "</div>"
 
-def diet_right_html(di):  # 截至目前(横向条) + 这一餐 + 下一餐
+def diet_right_html(di):  # 截至目前(横向条) + 这一餐(下一餐已抽出为整行长条)
     if not di["has_today"] or not di["so_far"]:
         return "<div class='note'>记一餐后，这里会显示截至目前的营养进度、这一餐判断和下一餐建议。</div>"
     items = "<div class='sf-item'><span class='sk'>热量</span><b>%d</b><i>kcal</i></div>" % di["kcal"]
@@ -796,11 +812,9 @@ def diet_right_html(di):  # 截至目前(横向条) + 这一餐 + 下一餐
                m["cls"], fill, lop, hip)
         items += ("<div class='sf-row'><div class='sf-item'><span class='sk'>%s</span><b>%d</b><i>/ %s g</i>"
                   "<em class='%s'>%s</em></div>%s</div>") % (m["name"], m["act"], esc(m["rng"]), m["cls"], esc(m["tag"]), bar)
-    # "下一餐"建议是前瞻动作,一页分享视图收起(手机仍显示);"目前整体"判定保留
-    return ("<div class='sf-h'>截至目前 · %s配额区间</div><div class='sf-strip'>%s</div>"
-            "<div class='judge2'><span class='jt'>%s</span>%s</div>"
-            "<div class='advice2 trim-wide'><span class='jt'>下一餐</span>%s</div>") % (
-            di["day_kind"], items, esc(di["judge_label"]), esc(di["meal_judge"]), esc(di["next_meal"]))
+    # 右上只陈列「数据」(热量 + 碳蛋脂配额条);这一餐/下一餐/松松点评统一为下方横条(见 render)
+    return "<div class='sf-h'>截至目前 · %s配额区间</div><div class='sf-strip'>%s</div>" % (
+            di["day_kind"], items)
 
 def supp_html(s):
     if s["kind"] == "praise":
@@ -813,8 +827,10 @@ def supp_html(s):
 def c_card(inner, title=None, cls="span2"):   # 统一卡片:可带标题
     h = ("<div class='mt'>%s</div>" % esc(title)) if title else ""
     return "<div class='card %s'>%s%s</div>" % (cls.strip(), h, inner)
-def c_coach(text, cls=""):                     # 松松点评盒(cls='trim-wide' → 一页视图收起、手机仍显示)
-    return "<div class='coach %s'><span class='coach-tag'>松松点评</span>%s</div>" % (cls, esc(text))
+def c_coach(text, cls="", tag="松松点评"):       # 绿底框:松松点评专属;标签=绿色药丸(coach-tag),与这一餐/下一餐的纯文字标签区分
+    return "<div class='coach %s'><span class='coach-tag'>%s</span>%s</div>" % (cls, esc(tag), esc(text))
+def c_plain(text, cls="", tag=""):              # 无底色的标签+文字行(这一餐/下一餐用);绿框留给松松点评
+    return "<div class='pstrip %s'><b class='ptag'>%s</b>%s</div>" % (cls, esc(tag), esc(text))
 def c_sub(title):                             # 小节小标题
     return "<div class='sub'>%s</div>" % esc(title)
 def c_stat(label, value, unit="", cls=""):    # 大数字块
@@ -830,15 +846,18 @@ def render(D):
     t, tr, di, ca, bo, mst = D["today"], D["trend"], D["diet"], D["calendar"], D["body"], D["ms"]
     supp, recap = D["supp"], D["recap"]
 
-    d_left, d_right = diet_html(di), diet_right_html(di)
+    d_left = diet_html(di)
     d_coach = di["coach"]; tr_cause = tr["cause"]; recap_txt = recap
     foot = "掉秤搭子 cut-buddy · 一笔一笔记出来的"   # 落款不带本地路径,截图分享出去也干净
     show_trend, show_pattern = di["show_trend"], di["show_pattern"]
 
     # 饮食卡弹性内容预算:精炼一页视图(只 CSS 隐藏,手机滚动视图仍保留全部)
     # "最近7天/30天"长期趋势在宽屏一页里始终精炼掉(速度点评已覆盖趋势);≥5 张餐卡再撤松松点评
-    extra_meals = max(0, (len(di["cards"]) if di.get("has_today") else 0) - 3)
-    trim2 = " trim-wide" if extra_meals >= 2 else ""
+    d_right = diet_right_html(di)
+    # 数据的解释统一为三条横条(同款盒/同字号):这一餐(恒保留)→ 下一餐 → 松松点评
+    # fitDiet() 按实测高度收起时:先收松松点评(.coach-strip)、再收下一餐(.next-strip)
+    judge_strip = c_plain(di["meal_judge"], cls="judge-strip", tag=di["judge_label"]) if di.get("meal_judge") else ""
+    next_strip  = c_plain(di["next_meal"],  cls="next-strip",  tag="下一餐")           if di.get("next_meal")  else ""
     # 饮食长期趋势:只留文字点评不画图(7天均值+30天模式,数据不足自动隐藏)
     trend_block = ("<div class='dyn trim-wide'>%s<div class='body-t'>%s</div></div>" % (
         c_sub("最近 7 天"), esc(di["week_text"]))) if show_trend else ""
@@ -861,10 +880,10 @@ def render(D):
                  esc(tr["chg"]), esc(tr_cause), esc(tr["adj"]))
     c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight' role='img' aria-label='体重趋势:单日散点(弱化)与7日均线(主线)'></canvas></div>%s%s" % (
         weight_kv, c_coach(tr["coach"])), "体重趋势", cls="chartgrow")
-    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div><div class='dyn%s'>%s</div>%s%s" % (
-        d_left, d_right, trim2, c_coach(d_coach), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱")
-    c_calendar = c_card("<div class='body-t' style='margin-bottom:12px'>%s</div>%s%s" % (
-        esc(ca["today_line"]), cal_html(ca), c_coach(ca["expl"], "trim-wide")), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="grow")
+    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s%s%s%s" % (
+        d_left, d_right, judge_strip, next_strip, c_coach(d_coach, cls="coach-strip"), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱", cls="dietcard span2")
+    cal_today = ("<div class='body-t' style='margin-bottom:12px'>%s</div>" % esc(ca["today_line"])) if ca["today_line"] else ""
+    c_calendar = c_card(cal_today + cal_html(ca) + c_coach(ca["expl"], "trim-wide"), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="grow")
     c_bodycomp = c_card("<div class='body-t'>%s</div>%s%s" % (
         esc(bo["summary"]), body_chart, c_coach(bo["coach"], "trim-wide")), "身体成分", cls="chartgrow")
     # 右下角位:周日=本周小结(每周复盘一次),平时=随机夸夸/小课堂
@@ -972,7 +991,7 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 /* 英雄卡:整页第一眼焦点(问句+答案+今日体重大数字) */
 .hero .upd{font-size:11px;color:var(--t3);letter-spacing:.04em;margin-bottom:8px;}
 .hero h1{font-size:21px;font-weight:700;letter-spacing:-.01em;margin:0;}
-.hero .answer{font-size:26px;font-weight:700;color:var(--accent-d);margin:2px 0 16px;letter-spacing:-.01em;}
+.hero .answer{font-size:28px;font-weight:700;color:var(--accent-d);margin:2px 0 16px;letter-spacing:-.01em;}
 .msbar{position:relative;margin:56px 24px 4px;}
 .track2{position:relative;height:8px;background:var(--weak);border-radius:8px;}
 .fill2{position:absolute;left:0;top:0;height:100%;background:linear-gradient(90deg,var(--accent-l),var(--accent-d));border-radius:8px;}
@@ -1028,10 +1047,12 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .bcell>.card.grow table.cal{flex:1;}
  .bcell:has(>.card.grow)>.card:last-child:not(.grow){flex:0 0 auto;}
  .trim-wide{display:none;}  /* 饮食卡弹性预算:一页视图下让位的低优先内容(手机滚动视图不受影响) */
+ .narrowdiet{min-height:0;}
+ .narrowdiet>.card.dietcard{min-height:0;overflow:hidden;}  /* 饮食卡锁到行高、超出裁切;由 fitDiet() 按实测高度决定收哪块 */
  .b1>.card{display:flex;flex-direction:column;justify-content:center;}
  .b1>.hero{justify-content:flex-start;}
- .hero h1{font-size:21px;}
- .hero .answer{font-size:28px;margin-bottom:8px;}
+ .hero h1{font-size:23px;}
+ .hero .answer{font-size:31px;margin-bottom:8px;}
  .hero .stat .v{font-size:42px;}
  .hero .stat.ma .v{font-size:24px;}
  .cv{height:205px;}
@@ -1042,12 +1063,13 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .wrap{padding-top:16px;padding-bottom:24px;}
  .card{padding:15px 18px;margin-bottom:12px;}
  .mt{margin-bottom:11px;}  /* 字号见基础 .mt(在后,生效) */
- .coach{margin-top:10px;padding:8px 12px;font-size:13.5px;line-height:1.6;}
+ .coach{margin-top:10px;padding:8px 12px;font-size:15px;line-height:1.6;}
+ .pstrip{margin-top:9px;font-size:15px;line-height:1.6;padding-left:12px;}
  .speed{margin-top:9px;font-size:13.5px;line-height:1.6;}
- .one{font-size:15.5px;}
+ .one{font-size:17px;}
  .stats{margin-bottom:11px;gap:26px;}
  .msbar{margin:50px 20px 2px;}
- .kv{margin-top:9px;} .kv .row{padding:5px 0;font-size:14px;}  /* 三行上下排,标签恒对齐 */
+ .kv{margin-top:9px;} .kv .row{padding:5px 0;font-size:15px;}  /* 三行上下排,标签恒对齐 */
  .kv .k{font-size:13px;}
  .range{margin-bottom:5px;}
  .cv.sm{height:96px;}
@@ -1055,24 +1077,24 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .bcell>.card.chartgrow{display:flex;flex-direction:column;flex:1 1 auto;}
  .card.chartgrow .cv{flex:1 1 auto;height:auto;min-height:84px;}
  .card.chartgrow .cv:not(.sm){min-height:185px;}
- .body-t{font-size:14.5px;line-height:1.62;}
- .tip-t{font-size:15px;margin-bottom:4px;} .tip-b{font-size:14.5px;line-height:1.62;}
- .pz-big{font-size:17px;line-height:1.55;margin-top:8px;}
+ .body-t{font-size:16px;line-height:1.62;}
+ .tip-t{font-size:16.5px;margin-bottom:4px;} .tip-b{font-size:16px;line-height:1.62;}
+ .pz-big{font-size:18.5px;line-height:1.55;margin-top:8px;}
  .judge2{margin-top:10px;font-size:14.5px;line-height:1.62;} .advice2{margin-top:8px;font-size:13.5px;line-height:1.58;}
  .diet-grid{gap:16px;}
  .diary{gap:8px;}
  .meal{padding:8px 11px;gap:10px;}
  .mtile{width:36px;height:36px;font-size:18px;border-radius:9px;} .mthumb{width:38px;height:38px;border-radius:9px;}
- .mn{margin-bottom:2px;font-size:11px;} .mfi{font-size:14.5px;} .mlist{line-height:1.5;} .mnut{margin-top:3px;font-size:11.5px;}
- .macro{margin-top:10px;padding:9px 12px;} .mr{padding:3px 0;} .mv{font-size:15.5px;} .mk{font-size:13.5px;}
+ .mn{margin-bottom:2px;font-size:12px;} .mfi{font-size:16px;} .mlist{line-height:1.5;} .mnut{margin-top:3px;font-size:12.5px;}
+ .macro{margin-top:10px;padding:9px 12px;} .mr{padding:3px 0;} .mv{font-size:17px;} .mk{font-size:14.5px;}
  .ms{font-size:12.5px;}
- .diet-right{padding:12px 14px;} .sf-strip{gap:9px;} .sf-item b{font-size:18px;} .sf-item .sk{font-size:12.5px;}
+ .diet-right{padding:12px 14px;} .sf-strip{gap:9px;} .sf-item b{font-size:21px;} .sf-item .sk{font-size:13.5px;}
  table.cal{border-spacing:3px;} table.cal td{height:32px;padding:3px 4px;border-radius:7px;}
  .dn{font-size:10px;} .chip{font-size:9.5px;padding:1.5px 5px;margin-top:2px;line-height:1.5;}
  .note{padding:9px 12px;font-size:12.5px;line-height:1.6;}
  .foot{margin-top:9px;}
 }
-.mt{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:.01em;margin:0 0 16px;}
+.mt{font-size:17px;font-weight:700;color:var(--ink);letter-spacing:.01em;margin:0 0 16px;}
 /* 今日状态 */
 .stats{display:flex;align-items:flex-end;gap:30px;margin-bottom:14px;}
 .stat .l{font-size:11px;color:var(--t3);letter-spacing:.03em;margin-bottom:8px;}
@@ -1081,7 +1103,7 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .stat.ma .v{font-size:22px;font-weight:600;color:var(--accent);}
 .stat.tr{margin-left:auto;text-align:right;}
 .tag{display:inline-block;background:var(--pos);color:#fff;border-radius:99px;padding:4px 12px;font-size:12px;font-weight:600;}
-.one{font-size:15px;line-height:1.55;color:var(--t2);}
+.one{font-size:16.5px;line-height:1.55;color:var(--t2);}
 /* 体重三行 */
 .kv{margin-top:14px;}
 .kv .row{display:flex;align-items:baseline;gap:14px;padding:9px 0;border-top:1px solid var(--line);font-size:14px;}
@@ -1128,9 +1150,11 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .ms{font-size:12px;font-weight:600;justify-self:end;}
 .ms.ok{color:var(--pos);} .ms.low{color:var(--t3);} .ms.warn{color:var(--warn);}
 .note{padding:14px;background:#F7FAF7;border:1px dashed var(--weak);border-radius:12px;font-size:12.5px;color:var(--t3);line-height:1.7;}
-.body-t{font-size:14.5px;line-height:1.7;color:var(--t2);}
-.coach{margin-top:14px;background:#F6FAF7;border:1px solid #E4EFE7;border-radius:12px;padding:11px 14px;font-size:13.5px;line-height:1.72;color:var(--t2);}
-.coach-tag{display:inline-block;font-size:10px;font-weight:700;color:var(--accent-d);background:var(--pos-soft);padding:2px 8px;border-radius:6px;margin-right:8px;letter-spacing:.05em;}
+.body-t{font-size:16px;line-height:1.7;color:var(--t2);}
+.coach{margin-top:14px;background:#F6FAF7;border:1px solid #E4EFE7;border-radius:12px;padding:11px 14px;font-size:15px;line-height:1.72;color:var(--t2);}
+.pstrip{margin-top:11px;font-size:15px;line-height:1.72;color:var(--t2);padding-left:14px;}  /* 这一餐/下一餐:无底色文字行,左缩进对齐点评框内文字 */
+.ptag{font-weight:700;color:var(--ink);margin-right:7px;}  /* 小标题:仅加粗,不加底色 */
+.coach-tag{display:inline-block;font-size:14px;font-weight:700;color:var(--accent-d);background:var(--pos-soft);padding:3px 10px;border-radius:7px;margin-right:8px;letter-spacing:.02em;}
 /* 饮食 · 截至目前(横向铺平) */
 .diet-right{padding:14px 16px;background:#FBFDFB;border:1px solid var(--line);border-radius:13px;}
 .sf-h{font-size:11px;color:var(--t3);font-weight:600;letter-spacing:.13em;text-transform:uppercase;margin:0 0 12px;}
@@ -1140,15 +1164,16 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 /* 碳蛋脂进度条:浅轨 + 目标区间两刻度 + 实际填充(按达标色) */
 .sf-bar{position:relative;height:7px;background:#EAF2EC;border-radius:6px;}
 .sf-fill{position:absolute;left:0;top:0;height:100%;border-radius:6px;background:var(--pos);transition:width .3s ease-out;}
-.sf-fill.warn{background:var(--warn);} .sf-fill.mut{background:var(--sand);}
+.sf-fill.warn{background:var(--warn);}  /* 超上限才换色(橙·警示);未达下限沿用默认绿,靠刻度线+文字区分 */
 .sf-tick{position:absolute;top:-2px;width:2px;height:11px;background:var(--accent-d);border-radius:1px;transform:translateX(-1px);opacity:.5;}
 .sf-item .sk{font-size:12px;color:var(--t3);}
-.sf-item b{font-size:18px;font-weight:700;letter-spacing:-.01em;}
+.sf-item b{font-size:21px;font-weight:700;letter-spacing:-.01em;}
 .sf-item i{font-size:11px;color:var(--t3);font-style:normal;}
 .sf-item em{font-size:11px;font-weight:600;font-style:normal;margin-left:1px;}
 .sf-item em.ok{color:var(--pos);} .sf-item em.mut{color:var(--t3);} .sf-item em.warn{color:var(--warn);}
 .judge2{margin-top:15px;font-size:14.5px;line-height:1.7;color:var(--ink);}
 .advice2{margin-top:11px;font-size:13.5px;line-height:1.65;color:var(--t2);}
+.advice2.full{background:#F6FAF7;border:1px solid #E4EFE7;border-radius:12px;padding:9px 14px;}  /* 下一餐:整行长条 */
 .jt{display:inline-block;font-size:11px;font-weight:700;color:var(--accent-d);background:var(--soft);padding:2px 8px;border-radius:6px;margin-right:8px;}
 /* 日历 */
 table.cal{width:100%;border-collapse:separate;border-spacing:4px;}
@@ -1210,11 +1235,22 @@ function cbFit(){
   if(innerWidth<1360){document.body.style.zoom='';return;}
   document.body.style.zoom='';
   var h=document.documentElement.scrollHeight;
-  var z=Math.max(0.55,Math.min(1,innerHeight/h));
+  var z=Math.max(0.72,Math.min(1,innerHeight/h));
   document.body.style.zoom=(z<1)?z:'';
 }
-addEventListener('resize',function(){clearTimeout(window.__cbft);window.__cbft=setTimeout(cbFit,120);});
-cbFit();
+// 饮食卡内容超出行高时,先收「松松点评」、再收「下一餐」(渲染后实测高度,替代餐数估算)
+function fitDiet(){
+  var card=document.querySelector('.card.dietcard'); if(!card) return;
+  var coach=card.querySelector('.coach-strip'), next=card.querySelector('.next-strip');
+  if(coach)coach.style.display=''; if(next)next.style.display='';
+  if(innerWidth<1360) return;
+  if(card.scrollHeight>card.clientHeight+1 && coach) coach.style.display='none';
+  if(card.scrollHeight>card.clientHeight+1 && next) next.style.display='none';
+}
+function cbAll(){ document.body.style.zoom=''; fitDiet(); cbFit(); }
+addEventListener('resize',function(){clearTimeout(window.__cbft);window.__cbft=setTimeout(cbAll,120);});
+addEventListener('load',cbAll);
+cbAll();
 </script>
 __CELEBRATE__
 </body></html>"""
