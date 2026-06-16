@@ -152,7 +152,9 @@ def day_activities(wos, detail=False):
             part = strength_part(w.get("note", ""))
             if part: lab = "力量·" + part
         labs.append(lab)
-        if w.get("cardio_min") and str(w.get("cardio_min")).strip() not in ("", "0"): labs.append("爬坡")
+        # cardio_min 专指"力量训练后又爬坡的分钟数"→只有力量日才贴"爬坡";纯有氧活动(跳舞/球类)别误填该字段
+        if w.get("is_strength") == "1" and w.get("cardio_min") and str(w.get("cardio_min")).strip() not in ("", "0"):
+            labs.append("爬坡")
     seen = []; [seen.append(x) for x in labs if x not in seen]
     return seen
 MEAL_EMOJI = {"早餐": "🥣", "早饭": "🥣", "午餐": "🍚", "午饭": "🍚", "晚餐": "🍲", "晚饭": "🍲",
@@ -327,11 +329,11 @@ def build_diet(profile, mbd, wbd, L, latest_w):
         return ""
     def mealcard(mn, items):
         sub = day_nutrition(items)
-        # 显示折叠:混合菜原料共用 dish 名→只显示一次菜名;无 dish 的单品显示本名;独立调料不单列
+        # 显示折叠:同 dish(菜名)折叠成一行;单品 dish=食材名本身→各显示一行;独立调料(dish=自身名)不单列,并进菜里的调料随菜名折叠
         shown, seen = [], set()
         for i in items:
             label = i.get("dish") or i["food"]
-            if not i.get("dish") and is_condiment(i["food"]): continue
+            if is_condiment(i["food"]) and label == i["food"]: continue
             if label not in seen: seen.add(label); shown.append(label)
         if not shown: shown = [i["food"] for i in items]
         return {"emoji": meal_emoji(mn), "meal": mn, "foods_list": shown, "empty": False,

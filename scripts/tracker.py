@@ -218,7 +218,8 @@ def cmd_log(payload):
             msg.append("⚠️未能计算[%s](缺营养表/不在食物库)" % it.get("food", "?")); continue
         grams, kcal, pro, fat, carb, fru, source, save = r
         append_csv("meals.csv", {"date": date, "meal": it.get("meal", ""), "food": it.get("food", ""),
-                   "dish": it.get("dish", ""),  # 显示用菜名(混合菜原料共用一个 dish,看板折叠成一行)
+                   "dish": it.get("dish") or it.get("food", ""),  # 显示名:混合菜原料共用一个菜名→折叠;留空则自动填食材名本身(单品)
+
                    "grams": grams, "kcal": kcal, "protein": pro, "fat": fat, "carb": carb,
                    "veg_g": grams if it.get("veg") else "", "fructose_g": fru,
                    "source": source, "note": it.get("note", "")})
