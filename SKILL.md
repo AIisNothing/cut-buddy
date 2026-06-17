@@ -61,11 +61,12 @@ description: >-
 5. **食物入库要告知用户**:当用户给了营养、食物被存进个人常吃库时,回一句"已记到你的常吃食物库,下次直接报名字就行~"。
 6. 读回传 JSON(`intake/quota(含 carb_low/high、protein_low/high)/vs_quota/ma7/this_week_avg/rate_kg_per_week/fat_target_g` 等),用**真实数字**回复。
 7. 只问趋势/不记录时:直接 `tracker.py today` 或 `weekly`。要出图:`tracker.py render` 然后 `open ~/Documents/cut-buddy-data/dashboard.html`。
+8. **可选·身体规律记录(`day.hunger`/`day.fatigue`,1-10)**:用户愿意时,每天顺手记"今天饿不饿(hunger)/累不累(fatigue)"。目的是把**前一天训练负荷(从运动记录自动算:力量次数+总时长+强度)→ 隔天体重变化/饥饿感**的滞后关系量化出来,帮用户理解"重训周体重虚高、休息后 whoosh 大跌"等个人规律。不强求,缺了也不影响主流程。
 
 ### payload schema
 ```json
 {"date":"2026-06-10","weight_kg":61.3,"body_fat_pct":28.0,
- "day":{"sleep_h":7.5,"period":false,"high_salt":false,"note":""},
+ "day":{"sleep_h":7.5,"period":false,"high_salt":false,"hunger":5,"fatigue":4,"note":""},
  "meals":[{"meal":"早餐","food":"鸡腿肉","grams":120,"per100":{"kcal":145,"protein":19.5,"fat":7,"carb":0},"source":"估算"}],
  "workouts":[{"type":"力量","duration_min":50,"intensity":"中","is_strength":true,"cardio_min":30,"note":"练胸+爬坡"}]}
 ```

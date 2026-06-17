@@ -33,7 +33,7 @@ def pdate(s):
 # ---------- 通用 CSV ----------
 SCHEMA = {
     "weight.csv":  ["date", "weight_kg", "body_fat_pct", "lean_mass_kg", "note"],
-    "days.csv":    ["date", "sleep_h", "period", "bloat", "bowel", "high_salt", "note"],
+    "days.csv":    ["date", "sleep_h", "period", "bloat", "bowel", "high_salt", "hunger", "fatigue", "note"],
     "meals.csv":   ["date", "meal", "food", "dish", "grams", "kcal", "protein", "fat", "carb", "veg_g", "fructose_g", "source", "note"],
     "workouts.csv":["date", "type", "duration_min", "intensity", "is_strength", "is_cardio", "is_ball", "is_rest", "cardio_min", "load", "performance", "fatigue", "energy_kcal", "distance_km", "raw_type", "note"],
     "foods.csv":   ["name", "brand", "per100_kcal", "per100_protein", "per100_fat", "per100_carb", "per100_fructose", "unit_g", "source", "added"],
@@ -210,6 +210,7 @@ def cmd_log(payload):
         upsert_csv("days.csv", "date", {"date": date, "sleep_h": d.get("sleep_h", ""),
                    "period": 1 if d.get("period") else "", "bloat": 1 if d.get("bloat") else "",
                    "bowel": 1 if d.get("bowel") else "", "high_salt": 1 if d.get("high_salt") else "",
+                   "hunger": d.get("hunger", ""), "fatigue": d.get("fatigue", ""),  # 饥饿/疲劳 1-10,用于训练负荷→隔天体重/食欲的滞后分析
                    "note": d.get("note", "")})
     saved_foods = []
     for it in payload.get("meals", []):
