@@ -164,6 +164,16 @@ def meal_emoji(name):
         if k in name: return v
     return "🍽️"
 
+def _cardio_minutes(workouts):
+    # 当日球类/有氧累计分钟。松松:有氧只跟"热量缺口"有关、不进碳水配额(高碳配额是给力训练后增肌窗口的)。
+    # 故有氧不算"训练日";但大运动量有氧会撑大缺口→那天碳水超配额由缺口对冲、不报警。
+    cm = 0.0
+    for w in workouts:
+        if w.get("is_ball") == "1" or w.get("is_cardio") == "1":
+            try: cm += float(w.get("duration_min") or 0)
+            except Exception: pass
+    return cm
+
 def build_all():
     profile = load_profile()
     series = weight_series()
@@ -299,17 +309,45 @@ def build_all():
         "lo4m": max(ms(series[0][0]), ms(L - datetime.timedelta(days=120))),
         "kcalDaily": diet["kcalDaily"], "kcalAvg": diet["kcalAvg"],
         "proteinDaily": diet["proteinDaily"], "fatDaily": diet["fatDaily"], "showDietChart": diet["show_trend"],
-        "bf": body["bf_series"], "fat": body["fat_series"], "lean": body["lean_series"], "showBody": body["has"]}
+        "bf": body["bf_series"], "showBody": body["has"]}
     return {"updated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "today": {"weight": latest_w, "ma7": ma_now, "trend_label": trend_label, "one": one, "speed": speed},
+            "today": {"weight": latest_w, "ma7": ma_now, "trend_label": trend_label, "one": one, "speed": speed, "weighed_today": weighed_today},
             "trend": {"chg": chg_line, "cause": cause_line, "adj": adj_line, "coach": coach_w},
             "ms": mstone, "diet": diet, "calendar": cal, "body": body,
             "supp": supp, "recap": recap, "is_sunday": L.isoweekday() == 7,
             "charts": charts, "celebrate": celebrate}
 
+def _macro_review(mbd, wbd, q, L, day_nutrition):
+    # 30天饮食复盘:只提炼3条核心要点(蛋白优势 / 脂肪漏点 / 主要油来源),返回"要点列表"分行展示。
+    # 规律变化慢,故每14天才重算一次(门控在调用处),这里只负责"算"。
+    cut = L - datetime.timedelta(days=30)
+    dd = {ds: day_nutrition(rows) for ds, rows in mbd.items() if pdate(ds) >= cut and rows}
+    n = len(dd)
+    if not n: return []
+    ptarget = (q or {}).get("protein_g") or 80
+    phit = sum(1 for v in dd.values() if v["protein"] >= ptarget)
+    fatover = sum(1 for v in dd.values() if v["fat"] > 55)
+    avgp = round(statistics.mean([v["protein"] for v in dd.values()]))
+    avgf = round(statistics.mean([v["fat"] for v in dd.values()]))
+    fat_by = collections.defaultdict(float)
+    for ds, rows in mbd.items():
+        if pdate(ds) >= cut:
+            for m in rows: fat_by[m["food"]] += float(m["fat"] or 0)
+    top = [k for k, val in sorted(fat_by.items(), key=lambda x: -x[1])[:3] if val > 0]
+    pts = ["🥩 蛋白稳:%d/%d 天达标、日均 %dg——最大优势,守住。" % (phit, n, avgp)]
+    if fatover >= max(2, n * 0.3):
+        pts.append("🫒 脂肪是漏点:%d/%d 天超标、日均 %dg(目标 48)——想提速就拧这里。" % (fatover, n, avgf))
+    else:
+        pts.append("🫒 脂肪控制不错:日均 %dg、仅 %d 天超标。" % (avgf, fatover))
+    if top:
+        pts.append("⚠️ 油主要来自:%s——别一天叠这几样。" % "、".join(top))
+    return pts
+
 def build_diet(profile, mbd, wbd, L, latest_w):
     todays = mbd.get(L.isoformat(), [])
-    is_train = any(r.get("is_strength") == "1" for r in wbd.get(L.isoformat(), []))
+    _wk_today = wbd.get(L.isoformat(), [])
+    is_train = any(r.get("is_strength") == "1" for r in _wk_today)      # 训练日=力量训练(松松:高碳配额服务于练后增肌窗口);有氧不算
+    big_cardio = (not is_train) and _cardio_minutes(_wk_today) >= 90    # 纯有氧/球类大运动量日:碳水超配额由缺口对冲(松松:有氧只跟缺口有关)
     q = quota_for(latest_w, profile, "training" if is_train else "rest")
     fatT = round(profile.get("fat_g_per_kg", 0.8) * latest_w)
     fat_hi = profile["fat_budget"]["training"][1] if is_train else profile["fat_budget"]["normal"][1]
@@ -350,7 +388,7 @@ def build_diet(profile, mbd, wbd, L, latest_w):
     # 截至目前进度（不提前下全天判定）+ 这一餐判断 + 下一餐建议
     so_far = []; meal_judge = next_meal = day_kind = ""; judge_label = "这一餐"
     if todays and q:
-        day_kind = "训练日" if is_train else "休息日"
+        day_kind = "训练日" if is_train else ("有氧日" if big_cardio else "休息日")
         fat_lo = round(fatT * 0.75)                     # 脂肪保底下限(松松:吃太少→激素/经期紊乱)
         def tag_macro(act, low, high, soft_high=False):  # 碳水/蛋白:区间判断(下限-上限)
             if act < low: return ("还差 %dg到下限" % round(low - act), "mut")
@@ -363,12 +401,22 @@ def build_diet(profile, mbd, wbd, L, latest_w):
             if act <= fat_hi: return ("适中", "ok")
             return ("超上限·后面少油", "warn")
         ct = tag_macro(tot["carb"], q["carb_low"], q["carb_high"])
+        if big_cardio and tot["carb"] > q["carb_high"]:      # 松松:碳水超不超看缺口;大有氧日缺口靠消耗保住,不报红
+            ct = ("超配额·有氧消耗大、缺口仍在", "ok")
         pt = tag_macro(tot["protein"], q["protein_low"], q["protein_high"], soft_high=True)
         ftg = tag_fat(tot["fat"])
+        fmax = profile.get("fructose_max_g", 50)
+        def tag_fruct(act):                              # 果糖:只有上限(松松50g/天),主要填肝糖原,超量才警示;无下限
+            if act > fmax: return ("超上限 %dg·水果先停" % round(act - fmax), "warn")
+            if act <= 0: return ("今天没吃水果", "mut")
+            if act >= fmax * 0.7: return ("接近上限(%d)" % fmax, "mut")
+            return ("还宽裕(上限%d)" % fmax, "ok")
+        frt = tag_fruct(tot["fructose"])
         so_far = [
             {"name": "碳水", "act": round(tot["carb"]), "lo": q["carb_low"], "hi": q["carb_high"], "rng": "%d–%d" % (q["carb_low"], q["carb_high"]), "tag": ct[0], "cls": ct[1]},
             {"name": "蛋白", "act": round(tot["protein"]), "lo": q["protein_low"], "hi": q["protein_high"], "rng": "%d–%d" % (q["protein_low"], q["protein_high"]), "tag": pt[0], "cls": pt[1]},
             {"name": "脂肪", "act": round(tot["fat"]), "lo": fat_lo, "hi": fat_hi, "rng": "%d–%d" % (fat_lo, fat_hi), "tag": ftg[0], "cls": ftg[1]},
+            {"name": "果糖", "act": round(tot["fructose"]), "lo": 0, "hi": fmax, "rng": "≤%d" % fmax, "tag": frt[0], "cls": frt[1]},
         ]
         if len(bymeal) <= 1:
             mn = list(bymeal.keys())[0] if bymeal else "这餐"
@@ -413,34 +461,52 @@ def build_diet(profile, mbd, wbd, L, latest_w):
 
     if todays and q:
         foods_today = [m["food"] for m in todays]
-        bits = []
-        bits.append("蛋白已经很足（%dg）、保肌没问题" % round(tot["protein"]) if tot["protein"] >= q["protein_g"] * 0.6
-                    else "蛋白还能再补点（目前 %dg）" % round(tot["protein"]))
-        bits.append("脂肪很干净（%dg）" % round(tot["fat"]) if tot["fat"] <= fatT * 0.7
-                    else ("脂肪还在预算内" if tot["fat"] <= fat_hi else "脂肪偏多了、后面少油"))
-        if tot["carb"] < q["carb_g"] * 0.6:
-            bits.append("碳水才 %dg、%s还有大空间" % (round(tot["carb"]), day_kind))
-        coach_d = "看你今天：" + "，".join(bits) + "。"
-        smart = list(dict.fromkeys(f for f in foods_today if any(k in f for k in ("魔芋", "鸡胸", "鸡蛋", "黄瓜", "生菜", "蔬菜", "西兰花", "瘦肉"))))
-        if smart:
-            coach_d += "像 %s 这种高蛋白低脂、又顶饱的，正是松松推荐的好食材。" % "、".join(smart[:3])
-        # 脂肪刺客 / 高脂肉(松松:看不见的脂肪最易低估)
-        FAT_TRAPS = ("五花", "排骨", "肥牛", "肥羊", "培根", "香肠", "肉肠", "午餐肉", "肉丸", "油条", "蛋挞", "麦芬", "坚果", "花生", "薯片", "炸", "酥", "奶油", "黄油", "糖醋", "锅包", "红烧肉", "扣肉", "鸡皮", "鸭皮")
+        FAT_TRAPS = ("五花", "排骨", "肥牛", "肥羊", "培根", "香肠", "肉肠", "午餐肉", "肉丸", "油条", "蛋挞", "麦芬", "坚果", "花生", "薯片", "炸", "酥", "奶油", "黄油", "糖醋", "锅包", "红烧肉", "扣肉", "鸡皮", "鸭皮", "麻薯")
         traps = list(dict.fromkeys(f for f in foods_today if any(k in f for k in FAT_TRAPS)))
-        if traps:
-            coach_d += "留意「%s」属高脂肉/糖油——松松说这类'看不见的脂肪'极占配额(宽油炒蛋1个就20–30g、两把坚果40g),记得如实计脂、别当瘦肉算。" % "、".join(traps[:3])
-        if is_train:
-            coach_d += "今天是训练日，把碳水主力放在练后那一餐（全天最大一份、练后 30 分钟内）。"
-        # 日内碳水分配(松松第5节):非练后/练前的单顿碳水占全天≥40% → 提醒别堆
-        if q["carb_g"]:
-            over = [(mn, round(day_nutrition(its)["carb"]), round(day_nutrition(its)["carb"] / q["carb_g"] * 100))
+        # 近30天主要脂肪来源:把宏观规律融入当天点评——今天吃到这类时点名提醒,加深印象
+        _cut30 = L - datetime.timedelta(days=30); _fat30 = collections.defaultdict(float)
+        for _ds, _rows in mbd.items():
+            if pdate(_ds) >= _cut30:
+                for _m in _rows: _fat30[_m["food"]] += float(_m["fat"] or 0)
+        _top_fat = [k for k, v in sorted(_fat30.items(), key=lambda x: -x[1])[:4] if v > 0]
+        seed = L.toordinal()
+        def pick(vs): return vs[seed % len(vs)]       # 措辞按日期轮换:同一天稳定、不同天换花样,避免天天雷同
+        # 只挑"今天真正值得说"的洞察,最多两条;没啥可提醒就留白。
+        # 不再每天复述宏量(上方进度条已展示)、也不再背"宽油炒蛋20-30g"这类常识长串。
+        cand = []   # (优先级, 文本) 数字越小越优先
+        if tot["fat"] > fat_hi:
+            cand.append((0, pick(["脂肪今天超预算了，接下来两顿少油、避开高脂肉。",
+                                   "脂肪冲过上限，后面走水煮/少油把油省回来。",
+                                   "今天油偏多，剩下的餐清淡点平衡一下。"])))
+        if "晚餐" in bymeal and tot["protein"] < q["protein_g"] * 0.6:
+            cand.append((1, pick(["蛋白今天没跟上，减脂期保肌优先，明天早点把瘦肉/蛋安排上。",
+                                   "今天蛋白偏少，明天补回来、别连着低。"])))
+        carb_hog = None
+        # 只在"休息日"提醒碳水别堆一顿;训练日那顿大碳水多半就是练后餐(用户按早/午/晚命名、不标"练后"),不再误劝"留到练后"
+        if q["carb_g"] and not is_train:
+            over = [(mn, round(day_nutrition(its)["carb"] / q["carb_g"] * 100))
                     for mn, its in bymeal.items()
-                    if "练后" not in mn and "练前" not in mn and day_nutrition(its)["carb"] / q["carb_g"] >= 0.40]
-            if over:
-                mn, mc, pct = max(over, key=lambda x: x[1])
-                coach_d += (("不过「%s」一顿就占了全天碳水的 %d%%——松松说最大碳水该留给练后那餐（40–50%%），其它餐别堆，下次把主食往练后挪。" % (mn, pct))
-                            if is_train else
-                            ("提醒：今天没练、没有练后窗口，「%s」却占了全天碳水 %d%%——休息日碳水要摊匀到各餐（每顿别超约 1/3）、先吃菜再吃主食，别集中在一顿。" % (mn, pct)))
+                    if day_nutrition(its)["carb"] / q["carb_g"] >= 0.45]
+            if over: carb_hog = max(over, key=lambda x: x[1])
+        if carb_hog:
+            mn, pct = carb_hog
+            cand.append((2, pick(["「%s」一顿占了全天碳水 %d%%，休息日摊匀到三餐会更稳。" % (mn, pct),
+                                  "今天碳水挺集中在「%s」(%d%%)，下次分散点、先菜后饭。" % (mn, pct)])))
+        today_topfat = [f for f in foods_today if f in _top_fat]   # 今天吃到的、属于你近30天主力脂肪源的食材
+        if today_topfat and tot["fat"] > fatT * 0.7:               # 把宏观规律带进当天:点名+长期事实
+            f0 = today_topfat[0]
+            cand.append((4, pick(["今天又有「%s」——它在你近30天的主要脂肪来源里排前列，这类积少成多，如实计、别叠。" % f0,
+                                   "「%s」是你近30天的脂肪大户之一，今天上桌了，留个心、别多。" % f0])))
+        elif traps and tot["fat"] > fatT * 0.7:                    # 没踩到主力脂肪源,但有刺客且脂肪不低
+            cand.append((4, pick(["今天有部分脂肪藏在「%s」里，记得如实计、别漏。" % "、".join(traps[:2]),
+                                   "「%s」是隐形脂肪大户，占了不少油额，心里有数就行。" % "、".join(traps[:2])])))
+        if cand:
+            cand.sort(key=lambda x: x[0])
+            coach_d = "".join(t for _, t in cand[:2])
+        else:                                        # 没啥要提醒=今天吃得到位,短夸或留白,不硬凑
+            coach_d = pick(["今天吃得挺稳、结构干净，没啥要挑的——继续保持 👍",
+                            "今天这些搭配很到位，挑不出毛病，保持节奏就好。",
+                            ""])
     else:
         coach_d = "记几餐后，这里会按松松框架，对你当天实际的吃法做点评。"
 
@@ -454,16 +520,25 @@ def build_diet(profile, mbd, wbd, L, latest_w):
             avg("kcal"), avg("protein"), avg("fat"), sum(1 for v in nut if v["fat"] >= 55), sum(1 for v in nut if v["veg"] > 0))
     else:
         week_text = "数据积累中。记满 3–7 天，这里会出现平均热量、蛋白是否稳定、脂肪是否常接近上限。"
+    # 「宏观复盘」(原最近30天块):规律变化慢→每 14 天才重算一次,平时显示上次缓存的
     show_pattern = meal_days >= 14
+    pattern_date = L.isoformat()
     if show_pattern:
-        fat_by = collections.defaultdict(float); cut = L - datetime.timedelta(days=30)
-        for ds, rows in mbd.items():
-            if pdate(ds) >= cut:
-                for m in rows: fat_by[m["food"]] += float(m["fat"] or 0)
-        top = [k for k, v in sorted(fat_by.items(), key=lambda x: -x[1])[:5] if v > 0]
-        pattern_text = "最近主要脂肪来源：" + "、".join(top) + "。同一天别叠太多就好。"
+        _mrp = P("macro_review.json"); _cached = None
+        if os.path.exists(_mrp):
+            try:
+                _st = json.load(open(_mrp, encoding="utf-8"))
+                if _st.get("points") and _st.get("generated") and (L - pdate(_st["generated"])).days < 14:
+                    _cached = _st
+            except Exception: pass
+        if _cached:
+            pattern_points = _cached["points"]; pattern_date = _cached["generated"]
+        else:
+            pattern_points = _macro_review(mbd, wbd, q, L, day_nutrition)
+            try: json.dump({"generated": L.isoformat(), "points": pattern_points}, open(_mrp, "w", encoding="utf-8"), ensure_ascii=False)
+            except Exception: pass
     else:
-        pattern_text = "数据积累中。记满 2–3 周，这里会总结最常见高脂来源、更容易掉秤的晚餐模式。"
+        pattern_points = ["数据积累中,记满 2–3 周这里会出现「30 天饮食复盘」:蛋白达标率、脂肪漏点、主要油来源。"]
 
     kcalDaily = []; proteinDaily = []; fatDaily = []
     for i in range(29, -1, -1):
@@ -474,7 +549,8 @@ def build_diet(profile, mbd, wbd, L, latest_w):
     return {"cards": cards, "so_far": so_far, "day_kind": day_kind, "meal_judge": meal_judge,
             "judge_label": judge_label, "next_meal": next_meal, "kcal": round(tot["kcal"]), "coach": coach_d,
             "has_today": bool(todays), "has_quota": bool(q),
-            "week_text": week_text, "show_trend": show_trend, "pattern_text": pattern_text, "show_pattern": show_pattern,
+            "week_text": week_text, "show_trend": show_trend, "pattern_points": pattern_points, "show_pattern": show_pattern, "pattern_date": pattern_date,
+            "macro_due": show_pattern and (pattern_date == L.isoformat()),   # 当天刚(每14天)重算→今天在"夸夸位"展示这次宏观复盘
             "kcalDaily": kcalDaily, "kcalAvg": round(statistics.mean([p["y"] for p in kcalDaily])) if kcalDaily else None,
             "proteinDaily": proteinDaily, "fatDaily": fatDaily}
 
@@ -509,8 +585,8 @@ def build_calendar(L, wbd):
     return {"year": y, "month": m, "weeks": weeks, "today_line": today_line, "expl": expl}
 
 def build_body(series):
-    lean = [(d, l) for (d, w, b, l) in series if l is not None]
-    fat = [(d, round(w - l, 2)) for (d, w, b, l) in series if l is not None]
+    # 体脂秤实际只测"体重+体脂率",瘦体重/脂肪量都是体脂率反推的同一类数据。
+    # 故身体成分图直接画体脂率%趋势,最真实、不重复造"两条假装独立的测量线"。
     bf = [(d, b) for (d, w, b, l) in series if b is not None]
     def trend(pts, days=28):
         if len(pts) < 4: return None
@@ -518,31 +594,26 @@ def build_body(series):
         rec = [v for (d, v) in pts if 0 <= (L-d).days < days]; old = [v for (d, v) in pts if days <= (L-d).days < days*2]
         if len(rec) < 2 or len(old) < 2: return None
         return round(statistics.mean(rec) - statistics.mean(old), 2)
-    ft = trend(fat); lt = trend(lean)
-    if ft is None:
-        summary = "数据还不够，积累 2–4 周再看。体脂秤只看长期趋势，不看单日。"
+    bft = trend(bf); cur = bf[-1][1] if bf else None
+    if bft is None:
+        summary = "体脂率数据还不够，积累 2–4 周再看。体脂秤只看长期趋势，不看单日。"
     else:
-        fdir = "缓慢下降" if ft < -0.2 else ("基本稳定" if ft <= 0.2 else "略升")
-        ldir = "基本稳定" if (lt is None or abs(lt) <= 0.5) else ("略降" if lt < 0 else "略升")
-        summary = "近 4 周脂肪量%s，肌肉量%s。" % (fdir, ldir)
-        if ft < -0.2 and (lt is None or lt >= -0.5): summary += "掉的主要是脂肪，肌肉守住了。"
-        elif lt is not None and lt < -0.5: summary += "肌肉略降，补够蛋白、别再压低热量。"
-    coach_b = "松松说家用体脂秤只看 2–4 周趋势、不看单日。"
-    if ft is None:
+        bdir = "缓慢下降" if bft < -0.2 else ("基本稳定" if bft <= 0.2 else "略升")
+        summary = "近 4 周体脂率%s（最新约 %.1f%%）。" % (bdir, cur)
+        if bft < -0.2: summary += "体脂率在往下=掉的主要是脂肪、肌肉守住了，这就是减脂质量好的样子。"
+        elif bft > 0.2: summary += "体脂率略升，注意补够蛋白、别只盯体重掉而丢了肌肉。"
+    coach_b = "松松说家用体脂秤只看 2–4 周趋势、不看单日（单日受水分/进食影响极大）。"
+    if bft is None:
         coach_b += "数据攒够 2–4 周再看减重质量。"
-    elif ft < -0.2 and (lt is None or lt >= -0.5):
-        coach_b += "你近 4 周掉的主要是脂肪、肌肉守住，这就是减脂质量好的样子。"
-    elif lt is not None and lt < -0.5:
-        coach_b += "肌肉有点往下，补够蛋白、别再压低热量，优先保肌。"
+    elif bft < -0.2:
+        coach_b += "你近 4 周体脂率稳稳往下，方向很好。"
     else:
         coach_b += "看 2–4 周的方向就好，别被单日体脂率带着焦虑。"
     # 图表只画近 4 周(28 天)——与"近 4 周"话术一致,也合松松"体脂秤只看 2-4 周趋势"
-    _lasts = [p[-1][0] for p in (bf, fat, lean) if p]
-    _cut = (max(_lasts) - datetime.timedelta(days=28)) if _lasts else None
-    def _w(pts): return [(d, v) for d, v in pts if (_cut is None or d >= _cut)]
-    return {"summary": summary, "coach": coach_b, "bf_series": [{"x": ms(d), "y": v} for d, v in _w(bf)],
-            "fat_series": [{"x": ms(d), "y": v} for d, v in _w(fat)],
-            "lean_series": [{"x": ms(d), "y": v} for d, v in _w(lean)], "has": ft is not None}
+    _cut = (bf[-1][0] - datetime.timedelta(days=28)) if bf else None
+    bf_w = [(d, v) for d, v in bf if (_cut is None or d >= _cut)]
+    return {"summary": summary, "coach": coach_b,
+            "bf_series": [{"x": ms(d), "y": v} for d, v in bf_w], "has": bft is not None}
 
 def build_milestones(profile, latest_w, ma_now):
     name = profile.get("name", "")
@@ -863,33 +934,42 @@ def render(D):
     # 饮食长期趋势:只留文字点评不画图(7天均值+30天模式,数据不足自动隐藏)
     trend_block = ("<div class='dyn trim-wide'>%s<div class='body-t'>%s</div></div>" % (
         c_sub("最近 7 天"), esc(di["week_text"]))) if show_trend else ""
-    pattern_block = ("<div class='dyn trim-wide'>%s<div class='body-t'>%s</div></div>" % (
-        c_sub("最近 30 天"), esc(di["pattern_text"]))) if show_pattern else ""
-    body_chart = "<div class='cv sm'><canvas id='cBody' role='img' aria-label='身体成分趋势:瘦体重(虚线)与脂肪量(实线)双轴折线图'></canvas></div>" if bo["has"] else ""
+    # 宏观复盘(两周一次)已挪到右下"夸夸/本周小结"轮换位(见下方 c_supp),不再塞进已满的饮食卡
+    body_chart = "<div class='cv sm'><canvas id='cBody' role='img' aria-label='体脂率%趋势折线图'></canvas></div>" if bo["has"] else ""
 
     # —— 用统一组件拼装整页(Bento 层级:英雄卡=第一眼焦点) ——
     # 里程碑卡:进度条 + 速度点评一句(msnote 给旗标下方的标签留空隙,防文字压标签)
     c_milestone = c_card(milestone_html(mst) + "<div class='speed msnote'>%s</div>" % esc(t["speed"]),
                          "里程碑 · 三个目标")
-    stats = (c_stat("今日体重", f1(t["weight"]), "kg") + c_stat("7 日均重", f1(t["ma7"]), "kg", "ma")
+    # 当天没称重 → 今日体重显示清淡的"--"(不拿旧体重冒充今天,避免误导);趋势/均重仍用最近一次体重算
+    if t["weighed_today"]:
+        stat_today = c_stat("今日体重", f1(t["weight"]), "kg")
+    else:
+        stat_today = c_stat("今日体重", "--", "", cls="noweigh")  # noweigh 样式=小号灰字,与7日均重同字号对齐
+    stats = (stat_today + c_stat("7 日均重", f1(t["ma7"]), "kg", "ma")
              + "<div class='stat tr'><div class='l'>趋势</div>%s</div>" % c_tag(t["trend_label"]))
     c_hero = ("<div class='card hero'><div class='upd'>更新至 %s</div><h1>%s</h1><div class='answer'>%s</div>"
               "<div class='stats'>%s</div><div class='one'>%s</div></div>") % (
         esc(D["updated"]), esc(mst["question"]), esc(mst["answer"]), stats, esc(t["one"]))
+    # 没称重时,今日变化不显示旧值,直接标"今天还没称重"
+    _chg = esc(tr["chg"]) if t["weighed_today"] else "今天还没称重"
     weight_kv = ("<div class='kv trim-wide'><div class='row'><span class='k'>今日变化</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>可能原因</span><span>%s</span></div>"
                  "<div class='row'><span class='k'>是否调整</span><span>%s</span></div></div>") % (
-                 esc(tr["chg"]), esc(tr_cause), esc(tr["adj"]))
+                 _chg, esc(tr_cause), esc(tr["adj"]))
     c_weight = c_card("<div class='range' id='range'></div><div class='cv'><canvas id='cWeight' role='img' aria-label='体重趋势:单日散点(弱化)与7日均线(主线)'></canvas></div>%s%s" % (
         weight_kv, c_coach(tr["coach"])), "体重趋势", cls="chartgrow")
-    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s%s%s%s" % (
-        d_left, d_right, judge_strip, next_strip, c_coach(d_coach, cls="coach-strip"), trend_block, pattern_block), "饮食 · 今日吃饭小日记 🍱", cls="dietcard span2")
+    c_diet = c_card("<div class='diet-grid'><div class='diet-left'>%s</div><div class='diet-right'>%s</div></div>%s%s%s%s" % (
+        d_left, d_right, judge_strip, next_strip, c_coach(d_coach, cls="coach-strip"), trend_block), "饮食 · 今日吃饭小日记 🍱", cls="dietcard span2")
     cal_today = ("<div class='body-t' style='margin-bottom:12px'>%s</div>" % esc(ca["today_line"])) if ca["today_line"] else ""
     c_calendar = c_card(cal_today + cal_html(ca) + c_coach(ca["expl"], "trim-wide"), "活动日历 · %d 年 %d 月" % (ca["year"], ca["month"]), cls="grow")
     c_bodycomp = c_card("<div class='body-t'>%s</div>%s%s" % (
         esc(bo["summary"]), body_chart, c_coach(bo["coach"], "trim-wide")), "身体成分", cls="chartgrow")
     # 右下角位:周日=本周小结(每周复盘一次),平时=随机夸夸/小课堂
-    if D.get("is_sunday"):
+    if di.get("macro_due"):
+        _pts = "".join("<div class='body-t' style='margin-bottom:7px'>%s</div>" % esc(p) for p in di.get("pattern_points", []))
+        c_supp = c_card(_pts, "30 天饮食复盘（更新于 %s）" % di.get("pattern_date", ""))
+    elif D.get("is_sunday"):
         c_supp = c_card("<div class='body-t'>%s</div>" % esc(recap_txt), "本周小结 · 周日复盘")
     else:
         c_supp = c_card(supp_html(supp), cls=("praise-card" if supp["kind"] == "praise" else ""))
@@ -1057,6 +1137,7 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
  .hero .answer{font-size:31px;margin-bottom:8px;}
  .hero .stat .v{font-size:42px;}
  .hero .stat.ma .v{font-size:24px;}
+ .hero .stat.noweigh .v{font-size:24px;}
  .cv{height:205px;}
  /* 窄格里的饮食卡:内部改单列(双列会挤破) */
  /* 饮食列加宽后内部恢复左右并排(餐清单|配额表),卡子高度减半 */
@@ -1103,6 +1184,7 @@ h1,.stat .v,.hero .answer,.sf-item b,.node .flag{font-family:'Varela Round','Nun
 .stat .v{font-size:34px;font-weight:680;line-height:.9;letter-spacing:-.02em;}
 .stat .v .u{font-size:13px;font-weight:500;color:var(--t3);margin-left:3px;}
 .stat.ma .v{font-size:22px;font-weight:600;color:var(--accent);}
+.stat.noweigh .v{font-size:22px;font-weight:500;color:var(--t3);letter-spacing:.05em;}  /* 没称重的占位"--":小号、灰、细,不抢视野,与7日均同字号对齐 */
 .stat.tr{margin-left:auto;text-align:right;}
 .tag{display:inline-block;background:var(--pos);color:#fff;border-radius:99px;padding:4px 12px;font-size:12px;font-weight:600;}
 .one{font-size:16.5px;line-height:1.55;color:var(--t2);}
@@ -1207,13 +1289,54 @@ const AX={type:'linear',ticks:{color:TICK,maxTicksLimit:6,font:{size:10},callbac
 function yax(o){return Object.assign({ticks:{color:TICK,font:{size:10}},grid:{color:GRID,drawTicks:false},border:{display:false}},o||{});}
 const LEG={labels:{color:TICK,boxWidth:10,boxHeight:10,font:{size:10},usePointStyle:true,pointStyle:'circle'}};
 let wc;
+// 轻量悬浮交互:竖向辅助线 + 底部小日期 + 左上两个纯文字标签(7日均/每日)。不用大黑框、不挡曲线。
+const crosshairPlugin={id:'crosshair',
+  afterEvent(c,args){
+    const e=args.event;
+    if(e.type==='mousemove'){
+      // 按鼠标像素 x 找最近的"7日均"点(不用 index 模式——目标虚线只有2点会污染匹配、把指针永远拽到最左)
+      const mi=c.data.datasets.findIndex(d=>d.label==='7 日均');
+      const meta=mi<0?null:c.getDatasetMeta(mi); let best=null,bd=1e9;
+      if(meta) for(let k=0;k<meta.data.length;k++){const p=meta.data[k];if(!p)continue;const d=Math.abs(p.x-e.x);if(d<bd){bd=d;best=k;}}
+      const ca=c.chartArea, inside=e.x>=ca.left-6&&e.x<=ca.right+6&&e.y>=ca.top-6&&e.y<=ca.bottom+6;
+      const k=inside?best:null;
+      if(c.$ci!==k){c.$ci=k;args.changed=true;}
+    }else if(e.type==='mouseout'){ if(c.$ci!=null){c.$ci=null;args.changed=true;} }
+  },
+  afterDatasetsDraw(c){
+    const idx=c.$ci; if(idx==null) return;
+    const ctx=c.ctx, ca=c.chartArea;
+    const mi=c.data.datasets.findIndex(d=>d.label==='7 日均'); if(mi<0) return;
+    const md=c.data.datasets[mi].data[idx], pt=c.getDatasetMeta(mi).data[idx];
+    if(!md||!pt) return;
+    const x=pt.x;
+    ctx.save();
+    // 竖向辅助线
+    ctx.beginPath();ctx.moveTo(x,ca.top);ctx.lineTo(x,ca.bottom);
+    ctx.lineWidth=1;ctx.setLineDash([4,3]);ctx.strokeStyle='rgba(22,163,74,0.5)';ctx.stroke();ctx.setLineDash([]);
+    // 当前点高亮小圆点
+    ctx.beginPath();ctx.arc(x,pt.y,3.5,0,2*Math.PI);ctx.fillStyle='#16A34A';ctx.fill();
+    // 底部小药丸:日期 + 7日均(在坐标轴下方,永不挡曲线;只显示7日均,不显示单日)
+    const txt=fd(md.x)+'   '+md.y.toFixed(2)+' kg';
+    ctx.font="600 11px sans-serif";ctx.textAlign='center';ctx.textBaseline='top';
+    const tw=ctx.measureText(txt).width;
+    const px=Math.min(Math.max(x,ca.left+tw/2+8),ca.right-tw/2-8), py=ca.bottom+4;
+    ctx.fillStyle='#16A34A';
+    if(ctx.roundRect){ctx.beginPath();ctx.roundRect(px-tw/2-7,py-1,tw+14,16,5);ctx.fill();}
+    ctx.fillStyle='#fff';ctx.fillText(txt,px,py+1);
+    ctx.restore();
+  }
+};
 function drawWeight(lo,hi){
   const cfg={data:{datasets:[
     {type:'line',label:'目标',data:[{x:D.minx,y:D.target},{x:D.maxx,y:D.target}],borderColor:'#C2DCC9',borderDash:[5,5],borderWidth:1,pointRadius:0},
     {type:'scatter',label:'每日',data:D.weightDaily,pointRadius:2.2,pointBackgroundColor:'#D7EDDE',borderColor:'#C2DCC9'},
     {type:'line',label:'7 日均',data:D.ma7,borderColor:'#16A34A',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(22,163,74,0.07)'},
-  ]},options:{maintainAspectRatio:false,plugins:{legend:Object.assign({},LEG,{labels:Object.assign({},LEG.labels,{filter:i=>i.text!=='目标'})})},
-    scales:{x:Object.assign({},AX,{min:lo,max:hi}),y:yax({})}}};
+  ]},options:{maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:Object.assign({},LEG,{labels:Object.assign({},LEG.labels,{filter:i=>i.text!=='目标'})}),
+      tooltip:{enabled:false}},                                  // 关掉大黑框,改用上面的轻量自绘
+    scales:{x:Object.assign({},AX,{min:lo,max:hi}),y:yax({})}},plugins:[crosshairPlugin]};
   if(wc)wc.destroy(); wc=new Chart(document.getElementById('cWeight'),cfg);
 }
 // 档位:近4周(默认)/近4月/全部;数据不够长的档位与「全部」重合,自动隐藏
@@ -1224,13 +1347,11 @@ const rd=document.getElementById('range');
 ranges.forEach(([t,lo],i)=>{const b=document.createElement('button');b.textContent=t;if(i===0)b.classList.add('on');
   b.onclick=()=>{[...rd.children].forEach(c=>c.classList.remove('on'));b.classList.add('on');drawWeight(lo,D.maxx);};rd.appendChild(b);});
 // 饮食长期趋势已改为文字点评(v2.1),不再画 7 天小图
-if(D.showBody && D.fat.length){
+if(D.showBody && D.bf.length){
   new Chart(document.getElementById('cBody'),{data:{datasets:[
-    {type:'line',label:'瘦体重 kg',data:D.lean,borderColor:'#0D9488',borderWidth:2.5,pointRadius:0,yAxisID:'y',borderDash:[6,4],tension:.3},
-    {type:'line',label:'脂肪量 kg',data:D.fat,borderColor:'#15803D',borderWidth:2.5,pointRadius:1.6,pointBackgroundColor:'#15803D',yAxisID:'y1',tension:.3},
+    {type:'line',label:'体脂率 %',data:D.bf,borderColor:'#15803D',borderWidth:2.5,pointRadius:1.8,pointBackgroundColor:'#15803D',yAxisID:'y',tension:.3},
   ]},options:{maintainAspectRatio:false,plugins:{legend:LEG},scales:{x:AX,
-    y:yax({position:'left',grace:'12%'}),
-    y1:yax({position:'right',grace:'12%',grid:{drawOnChartArea:false}})}}});
+    y:yax({position:'left',grace:'15%'})}}});
 }
 // 一屏自适应:宽屏下内容比窗口高就整体等比缩小,打开即见全部、零滚动(窄屏/手机不缩)
 function cbFit(){
